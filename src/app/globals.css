@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  --azure-blue: #0078d4;
+  --azure-dark: #106ebe;
+  --azure-light: #50e6ff;
+  --success: #107c10;
+  --warning: #ffb900;
+  --error: #d13438;
+  --critical: #a80000;
+}
+
+body {
+  background: linear-gradient(135deg, #0a0f1c 0%, #1a1f2e 50%, #0d1421 100%);
+  min-height: 100vh;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(0, 120, 212, 0.3);
+}
+
+.glow-success {
+  box-shadow: 0 0 20px rgba(16, 124, 16, 0.3);
+}
+
+.glow-warning {
+  box-shadow: 0 0 20px rgba(255, 185, 0, 0.3);
+}
+
+.glow-error {
+  box-shadow: 0 0 20px rgba(209, 52, 56, 0.3);
+}
+
+.glow-critical {
+  box-shadow: 0 0 20px rgba(168, 0, 0, 0.5);
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
