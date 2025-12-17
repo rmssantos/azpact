@@ -1,0 +1,96 @@
+# Stop and Deallocate VM Rules
+
+# Stop VM - Basic rule
+- id: stop-vm-standard
+  name: Stop VM
+  description: Standard VM stop operation (hardware stays allocated)
+  type: rule
+  layer: infra
+  actions: [StopVM]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Stopping a VM performs a graceful shutdown. The VM is stopped but
+      hardware remains allocated. You continue to pay for compute resources.
+      Temp disk data is preserved. Dynamic IPs remain assigned.
+  mitigations:
+    - stop-applications
+    - drain-connections
+  sources:
+    - title: "Azure Docs - Stop and start a VM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/stop-start"
+
+# Deallocate VM - Standard rule
+- id: deallocate-vm-standard
+  name: Deallocate VM
+  description: Standard VM deallocation (releases hardware)
+  type: rule
+  layer: infra
+  actions: [DeallocateVM]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Deallocating a VM releases the underlying hardware. This stops billing
+      for compute but may take longer to restart as new hardware must be allocated.
+      Dynamic public IPs will change on restart.
+  mitigations:
+    - stop-applications
+    - drain-connections
+    - backup-vm
+  sources:
+    - title: "Azure Docs - Stop and deallocate VMs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/stop-start"
+
+# Deallocate VM with temp disk - Data loss warning
+- id: deallocate-vm-temp-disk-loss
+  name: Deallocate loses temp disk data
+  description: Temp disk data is lost when VM is deallocated
+  type: rule
+  layer: guest
+  actions: [DeallocateVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: true
+  impact:
+    risk: high
+    reason: >
+      Your VM SKU has a temp disk. All data on the temp disk (D: on Windows,
+      /dev/sdb on Linux) will be permanently lost when the VM is deallocated.
+      This includes pagefile/swap and any application data stored there.
+    affectedComponents:
+      - temp-disk
+      - pagefile
+      - swap
+  mitigations:
+    - backup-temp-disk-data
+    - relocate-pagefile
+  sources:
+    - title: "Azure Docs - Temporary disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+
+# Deallocate VM - Dynamic IP change warning
+- id: deallocate-vm-dynamic-ip
+  name: Dynamic IP changes on deallocate
+  description: Dynamic public IPs will change after deallocation
+  type: rule
+  layer: infra
+  actions: [DeallocateVM]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      If your VM uses a dynamic public IP address, it will be released when
+      deallocated and a new IP will be assigned on restart. Static IPs are
+      not affected. Update DNS records or consider using a static IP.
+  mitigations:
+    - use-static-ip
+    - update-dns
+  sources:
+    - title: "Azure Docs - Public IP addresses"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses"

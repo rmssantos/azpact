@@ -335,6 +335,110 @@ export const articles: Record<ActionType | "general", Article[]> = {
     },
   ],
 
+  // Stop VM articles
+  StopVM: [
+    {
+      id: "stop-start-vm",
+      title: "Stop and Start VMs",
+      description: "Learn about stopping and starting Azure VMs and the billing implications.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing",
+      category: "action",
+    },
+  ],
+
+  // Deallocate VM articles
+  DeallocateVM: [
+    {
+      id: "deallocate-vm",
+      title: "Deallocate VMs",
+      description: "Understand deallocating VMs and when temp disk data is lost.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing",
+      category: "action",
+    },
+    {
+      id: "temp-disk-overview",
+      title: "Temporary Disk",
+      description: "Understand the temporary disk on Azure VMs and data persistence.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk",
+      category: "best-practice",
+    },
+  ],
+
+  // Capture VM articles
+  CaptureVM: [
+    {
+      id: "capture-vm-windows",
+      title: "Capture Windows VM Image",
+      description: "Create a managed image of a generalized Windows VM.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/capture-image-resource",
+      category: "action",
+    },
+    {
+      id: "capture-vm-linux",
+      title: "Capture Linux VM Image",
+      description: "Create a managed image of a generalized Linux VM.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/capture-image",
+      category: "action",
+    },
+    {
+      id: "sysprep-overview",
+      title: "Sysprep Overview",
+      description: "Understand Sysprep for Windows image generalization.",
+      url: "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/sysprep-process-overview",
+      category: "action",
+    },
+    {
+      id: "create-vm-specialized",
+      title: "Create VM from Specialized Image",
+      description: "Create a VM from a specialized image without generalization.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/create-vm-specialized",
+      category: "action",
+    },
+  ],
+
+  // Add NIC articles
+  AddNIC: [
+    {
+      id: "add-remove-nic",
+      title: "Add or Remove Network Interfaces",
+      description: "How to add or remove NICs from Azure VMs.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm",
+      category: "action",
+    },
+    {
+      id: "multiple-nics-linux",
+      title: "Configure Multiple NICs (Linux)",
+      description: "Configure multiple network interfaces on a Linux VM.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/multiple-nics",
+      category: "action",
+    },
+    {
+      id: "multiple-nics-windows",
+      title: "Configure Multiple NICs (Windows)",
+      description: "Configure multiple network interfaces on a Windows VM.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/multiple-nics",
+      category: "action",
+    },
+  ],
+
+  // Remove NIC articles
+  RemoveNIC: [
+    {
+      id: "add-remove-nic-remove",
+      title: "Add or Remove Network Interfaces",
+      description: "How to add or remove NICs from Azure VMs.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm",
+      category: "action",
+    },
+    {
+      id: "nic-overview",
+      title: "Network Interface Overview",
+      description: "Understand network interfaces in Azure Virtual Network.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface",
+      category: "best-practice",
+    },
+  ],
+
   // General articles (backups, snapshots, etc.)
   general: [
     {

@@ -1,0 +1,55 @@
+# Cross-Region Move rules
+# Rules for moving VMs to different Azure regions
+
+- id: cross-region-move
+  name: Cross-Region VM Migration
+  description: Moving VM to a different Azure region
+  type: rule
+  layer: infra
+  actions: [CrossRegionMove]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: high
+    reason: >
+      Cross-region move requires creating disk snapshots, copying them to the target region, and recreating the VM. Recommended: Use Azure Resource Mover for centralized management, dependency identification, and cleanup. Alternative: Use Azure Site Recovery for replication-based migration with minimal cutover downtime. Expect 30+ minutes depending on disk sizes and region distance.
+  mitigations: [backup-vm, snapshot-os-disk, snapshot-data-disks, use-resource-mover, use-site-recovery, notify-users, verify-applications]
+  sources:
+    - title: "Azure Resource Mover"
+      url: "https://learn.microsoft.com/en-us/azure/resource-mover/overview"
+    - title: "Move VMs to Another Region"
+      url: "https://learn.microsoft.com/en-us/azure/site-recovery/azure-to-azure-tutorial-migrate"
+
+- id: cross-region-ip-change
+  name: IP Address Change on Region Move
+  description: Public IP will change on region move
+  type: rule
+  layer: guest
+  actions: [CrossRegionMove]
+  conditions: []
+  impact:
+    risk: high
+    reason: >
+      Public and private IP addresses will change after moving to a new region. Update DNS records, firewall rules, and application configurations accordingly.
+    affectedComponents: ["Public IP", "Private IP", "DNS records", "Firewall rules"]
+  mitigations: [notify-users]
+  sources:
+    - title: "Move VMs to Another Region"
+      url: "https://learn.microsoft.com/en-us/azure/site-recovery/azure-to-azure-tutorial-migrate"
+
+- id: cross-region-networking
+  name: Network Configuration Changes
+  description: Network settings need reconfiguration
+  type: rule
+  layer: guest
+  actions: [CrossRegionMove]
+  conditions: []
+  impact:
+    risk: medium
+    reason: >
+      The VM will need to be connected to a VNet in the target region. NSGs, load balancers, and other networking components must be recreated or migrated separately.
+    affectedComponents: ["Virtual Network", "Subnet", "NSG", "Load Balancer"]
+  mitigations: []
+  sources:
+    - title: "Azure Resource Mover - Networking"
+      url: "https://learn.microsoft.com/en-us/azure/resource-mover/overview"

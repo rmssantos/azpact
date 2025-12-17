@@ -1,0 +1,62 @@
+# Availability Zone Migration rules
+# Rules for moving VMs between zones
+
+- id: zone-to-zone-migration
+  name: Zone-to-Zone Migration
+  description: Moving VM from one zone to another zone
+  type: rule
+  layer: infra
+  actions: [ChangeZone]
+  conditions:
+    - field: vm.zonal
+      operator: eq
+      value: true
+  impact:
+    reboot: guaranteed
+    downtime: high
+    reason: >
+      Moving a VM between Availability Zones (e.g., Zone 1 to Zone 2) is a manual process. You must: 1) Create snapshots of all disks, 2) Delete the VM (keeping disks), 3) Recreate the VM in the target zone using the snapshots. There is no direct migration path or portal option for zone-to-zone moves. Expect significant downtime.
+  mitigations: [backup-vm, snapshot-os-disk, snapshot-data-disks, notify-users, verify-applications]
+  sources:
+    - title: "Move VMs to Another Zone"
+      url: "https://learn.microsoft.com/en-us/azure/site-recovery/move-azure-vms-avset-azone"
+
+- id: regional-to-zonal-migration
+  name: Regional to Zonal Migration
+  description: Adding availability zone to non-zonal VM
+  type: rule
+  layer: infra
+  actions: [ChangeZone]
+  conditions:
+    - field: vm.zonal
+      operator: eq
+      value: false
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Converting a regional (non-zonal) VM to a zonal deployment is fully supported. Simplest method: Use the Azure portal's 'Edit Availability' feature to select the target zone - Azure creates a snapshot, deploys a new zonal VM, and stops the original. Alternative: Use Azure Site Recovery for minimal downtime. Note: A new NIC and potentially new Public IP will be created.
+  mitigations: [backup-vm, use-portal-zone-move, use-site-recovery, notify-users, verify-applications]
+  sources:
+    - title: "Move Regional VMs to Zonal"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/move-virtual-machines-regional-zonal-portal"
+
+- id: regional-to-zonal-resources
+  name: Resource Changes on Zone Move
+  description: New resources created during regional to zonal migration
+  type: rule
+  layer: guest
+  actions: [ChangeZone]
+  conditions:
+    - field: vm.zonal
+      operator: eq
+      value: false
+  impact:
+    risk: medium
+    reason: >
+      When moving from regional to zonal deployment, a new Network Interface Card (NIC) and potentially a new Public IP address are created. Update any scripts, firewall rules, or DNS records that reference the old resources. The original VM must be deleted after migration to avoid double billing.
+    affectedComponents: ["Network Interface", "Public IP", "DNS records"]
+  mitigations: [notify-users]
+  sources:
+    - title: "Move Regional VMs to Zonal"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/move-virtual-machines-regional-zonal-portal"

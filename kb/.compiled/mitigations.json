@@ -1,0 +1,411 @@
+[
+  {
+    "id": "backup-vm",
+    "title": "Create VM Backup",
+    "description": "Create a full VM backup using Azure Backup before proceeding with the change.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-vms-first-look-arm",
+    "steps": [
+      "Navigate to the VM in Azure Portal",
+      "Click Backup under Operations",
+      "Configure backup policy and vault",
+      "Run backup now"
+    ]
+  },
+  {
+    "id": "snapshot-os-disk",
+    "title": "Snapshot OS Disk",
+    "description": "Create a snapshot of the OS disk to enable quick rollback if the change fails.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/snapshot-copy-managed-disk"
+  },
+  {
+    "id": "snapshot-data-disks",
+    "title": "Snapshot Data Disks",
+    "description": "Create snapshots of all data disks involved in the change operation.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/snapshot-copy-managed-disk"
+  },
+  {
+    "id": "stop-vm-gracefully",
+    "title": "Stop VM Gracefully",
+    "description": "Shut down the VM gracefully from within the OS before deallocating to ensure filesystem consistency.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing"
+  },
+  {
+    "id": "deallocate-vm",
+    "title": "Deallocate VM",
+    "description": "Deallocate (stop) the VM to release hardware resources. Required for certain resize operations.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+  },
+  {
+    "id": "stop-applications",
+    "title": "Stop Applications",
+    "description": "Stop all applications and services that depend on the affected disks to prevent data corruption.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "drain-connections",
+    "title": "Drain Active Connections",
+    "description": "Drain active connections from load balancers and allow existing sessions to complete.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-overview"
+  },
+  {
+    "id": "notify-users",
+    "title": "Notify Users",
+    "description": "Send maintenance notification to affected users before proceeding.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "deactivate-vg",
+    "title": "Deactivate Volume Group",
+    "description": "Run 'vgchange -an <vg_name>' to deactivate the volume group before disk operations.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://man7.org/linux/man-pages/man8/vgchange.8.html"
+  },
+  {
+    "id": "remove-pv-from-vg",
+    "title": "Remove PV from Volume Group",
+    "description": "Use 'pvmove' to migrate data off the disk, then 'vgreduce' to remove it from the VG.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://man7.org/linux/man-pages/man8/pvmove.8.html"
+  },
+  {
+    "id": "extend-lv-after-resize",
+    "title": "Extend LV After Disk Resize",
+    "description": "After resizing the disk, run 'pvresize', 'lvextend', and 'resize2fs' to use the new space.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+  },
+  {
+    "id": "check-raid-health",
+    "title": "Check RAID Array Health",
+    "description": "Verify RAID array is healthy using 'mdadm --detail' before any disk operations.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ]
+  },
+  {
+    "id": "fail-disk-from-raid",
+    "title": "Fail Disk from RAID Array",
+    "description": "Mark the disk as failed in the RAID array using 'mdadm --fail' before detaching.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://docs.kernel.org/admin-guide/md.html"
+  },
+  {
+    "id": "unmount-filesystem",
+    "title": "Unmount Filesystem",
+    "description": "Unmount the filesystem before detaching the disk to prevent data corruption.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ]
+  },
+  {
+    "id": "remove-fstab-entry",
+    "title": "Update /etc/fstab",
+    "description": "Remove or comment out the fstab entry for the disk to prevent boot failures.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/attach-disk-portal#connect-to-the-linux-vm-to-mount-the-new-disk"
+  },
+  {
+    "id": "extend-filesystem",
+    "title": "Extend Filesystem",
+    "description": "After disk resize, extend the filesystem using 'resize2fs' (ext4) or 'xfs_growfs' (XFS).",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+  },
+  {
+    "id": "extend-partition-windows",
+    "title": "Extend Partition in Windows",
+    "description": "Use Disk Management or 'Extend-Partition' PowerShell cmdlet to extend the volume.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "Windows"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+  },
+  {
+    "id": "offline-disk-windows",
+    "title": "Offline Disk in Windows",
+    "description": "Set the disk offline in Disk Management before detaching to ensure clean removal.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Windows"
+    ]
+  },
+  {
+    "id": "backup-temp-disk-data",
+    "title": "Backup Temp Disk Data",
+    "description": "Copy any important data from the temporary disk (D: or /dev/sdb) as it will be lost on redeploy.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk",
+    "steps": [
+      "Identify data on temp disk (D:\\ on Windows, /mnt on Linux)",
+      "Copy to persistent storage or Azure Blob",
+      "Verify copy completed successfully"
+    ]
+  },
+  {
+    "id": "move-pagefile",
+    "title": "Move Page File",
+    "description": "Move the Windows page file from the temp disk if using a VM SKU without temp storage.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Windows"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+  },
+  {
+    "id": "use-site-recovery",
+    "title": "Use Azure Site Recovery",
+    "description": "Azure Site Recovery enables replication to target zone/region with minimal downtime during failover.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/site-recovery/move-azure-vms-avset-azone"
+  },
+  {
+    "id": "use-resource-mover",
+    "title": "Use Azure Resource Mover",
+    "description": "Azure Resource Mover provides centralized management for cross-region moves, including dependency identification.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/resource-mover/overview"
+  },
+  {
+    "id": "use-portal-zone-move",
+    "title": "Use Azure Portal Zone Move",
+    "description": "Use the Azure portal's 'Edit Availability' feature to move regional VMs to a specific zone.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/move-virtual-machines-regional-zonal-portal"
+  },
+  {
+    "id": "verify-disks-attached",
+    "title": "Verify Disks Attached",
+    "description": "After restart, verify all disks are attached and accessible using 'lsblk' or Disk Management.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "verify-mounts",
+    "title": "Verify Mount Points",
+    "description": "Confirm all filesystems are mounted correctly at their expected mount points.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "verify-applications",
+    "title": "Verify Applications",
+    "description": "Start applications and verify they function correctly with the new configuration.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "run-sysprep",
+    "title": "Run Sysprep (Windows)",
+    "description": "Run sysprep /generalize /oobe /shutdown to prepare Windows for image capture.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Windows"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/sysprep-process-overview",
+    "steps": [
+      "Open cmd as Administrator",
+      "Navigate to C:\\Windows\\System32\\Sysprep",
+      "Run: sysprep /generalize /oobe /shutdown",
+      "Wait for VM to shut down automatically"
+    ]
+  },
+  {
+    "id": "run-waagent-deprovision",
+    "title": "Run waagent deprovision (Linux)",
+    "description": "Run 'sudo waagent -deprovision+user' to prepare Linux for image capture.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/capture-image",
+    "steps": [
+      "SSH into the VM",
+      "Run: sudo waagent -deprovision+user -force",
+      "Exit SSH session",
+      "Deallocate the VM from Azure Portal"
+    ]
+  },
+  {
+    "id": "verify-nic-subnet",
+    "title": "Verify NIC Subnet Compatibility",
+    "description": "Ensure the new NIC is in a subnet compatible with the VM's existing networking configuration.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm"
+  },
+  {
+    "id": "configure-network-manager",
+    "title": "Configure Network Manager (Linux)",
+    "description": "Update network manager configuration to use the new NIC after it is attached.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "Linux"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/multiple-nics"
+  },
+  {
+    "id": "configure-ip-settings",
+    "title": "Configure IP Settings",
+    "description": "Configure IP address and routing for the new network interface in the guest OS.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/multiple-nics"
+  },
+  {
+    "id": "migrate-workloads",
+    "title": "Migrate Workloads",
+    "description": "Migrate workloads from the NIC being removed to another NIC before removal.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "update-load-balancer",
+    "title": "Update Load Balancer",
+    "description": "Update load balancer backend pool to remove or add the affected NIC.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/load-balancer/load-balancer-overview"
+  },
+  {
+    "id": "use-static-ip",
+    "title": "Use Static Public IP",
+    "description": "Consider using a static public IP address to prevent IP changes on deallocation.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses"
+  },
+  {
+    "id": "update-dns",
+    "title": "Update DNS Records",
+    "description": "Update DNS records if the public IP address changes after deallocation.",
+    "phase": "after",
+    "required": false,
+    "platforms": [
+      "all"
+    ]
+  },
+  {
+    "id": "relocate-pagefile",
+    "title": "Relocate Pagefile/Swap",
+    "description": "Move pagefile (Windows) or swap (Linux) from temp disk if it will be lost on deallocation.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+  }
+]

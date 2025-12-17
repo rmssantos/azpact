@@ -11,8 +11,13 @@ import {
   DowntimeLevel,
   RiskLevel,
 } from "@/types";
-import { rules } from "@/data/rules";
-import { getMitigations } from "@/data/mitigations";
+import {
+  rules,
+  getMitigations,
+  getBlockerRules,
+  getInfraRules,
+  getGuestRules,
+} from "@/data/kb-loader";
 import { getSKU } from "@/data/skus";
 
 // Priority ordering for impact levels
@@ -123,21 +128,41 @@ function evaluateCondition(
       return fieldValue !== compareValue;
     case "in":
       return Array.isArray(compareValue) && compareValue.includes(fieldValue);
-    case "notIn":
+    case "nin":
       return Array.isArray(compareValue) && !compareValue.includes(fieldValue);
     case "exists":
-      return compareValue ? fieldValue !== undefined : fieldValue === undefined;
+      return fieldValue !== undefined && fieldValue !== null;
+    case "notExists":
+      return fieldValue === undefined || fieldValue === null;
     case "gt":
       return (
         typeof fieldValue === "number" &&
         typeof compareValue === "number" &&
         fieldValue > compareValue
       );
+    case "gte":
+      return (
+        typeof fieldValue === "number" &&
+        typeof compareValue === "number" &&
+        fieldValue >= compareValue
+      );
     case "lt":
       return (
         typeof fieldValue === "number" &&
         typeof compareValue === "number" &&
         fieldValue < compareValue
+      );
+    case "lte":
+      return (
+        typeof fieldValue === "number" &&
+        typeof compareValue === "number" &&
+        fieldValue <= compareValue
+      );
+    case "matches":
+      return (
+        typeof fieldValue === "string" &&
+        typeof compareValue === "string" &&
+        new RegExp(compareValue).test(fieldValue)
       );
     default:
       return false;
@@ -225,82 +250,74 @@ export function evaluateImpact(
     affectedComponents: [],
   };
 
-  // Check blockers first
-  const blockers = rules.filter((r) => r.category === "blocker");
+  // Check blockers first (type === "blocker")
+  const blockers = getBlockerRules();
   for (const blocker of blockers) {
     if (ruleMatches(blocker, action, evalContext)) {
       return {
         blocked: true,
-        blockerReason: blocker.impact?.reason || blocker.description,
+        blockerReason: blocker.impact.reason || blocker.description,
         infra: infraImpact,
         guest: guestImpact,
         mitigations: [],
-        explanation: `**BLOCKED:** ${blocker.impact?.reason || blocker.description}`,
+        explanation: `**BLOCKED:** ${blocker.impact.reason || blocker.description}`,
         matchedRules: [blocker.id],
       };
     }
   }
 
-  // Evaluate infra rules
-  const infraRules = rules.filter((r) => r.category === "infra");
+  // Evaluate infra rules (type === "rule" && layer === "infra")
+  const infraRules = getInfraRules();
   for (const rule of infraRules) {
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
 
       // Aggregate impact (take highest severity)
-      if (rule.impact) {
-        if (
-          rule.impact.reboot &&
-          rebootPriority[rule.impact.reboot] > rebootPriority[infraImpact.reboot]
-        ) {
-          infraImpact.reboot = rule.impact.reboot;
-          infraImpact.reason = rule.impact.reason;
-        }
-        if (
-          rule.impact.downtime &&
-          downtimePriority[rule.impact.downtime] >
-            downtimePriority[infraImpact.downtime]
-        ) {
-          infraImpact.downtime = rule.impact.downtime;
-        }
+      if (
+        rule.impact.reboot &&
+        rebootPriority[rule.impact.reboot] > rebootPriority[infraImpact.reboot]
+      ) {
+        infraImpact.reboot = rule.impact.reboot;
+        infraImpact.reason = rule.impact.reason;
+      }
+      if (
+        rule.impact.downtime &&
+        downtimePriority[rule.impact.downtime] >
+          downtimePriority[infraImpact.downtime]
+      ) {
+        infraImpact.downtime = rule.impact.downtime;
       }
 
       // Collect mitigations
-      if (rule.mitigations) {
-        rule.mitigations.forEach((m) => mitigationIds.add(m));
-      }
+      rule.mitigations.forEach((m) => mitigationIds.add(m));
     }
   }
 
-  // Evaluate guest rules
-  const guestRules = rules.filter((r) => r.category === "guest");
+  // Evaluate guest rules (type === "rule" && layer === "guest")
+  const guestRules = getGuestRules();
   for (const rule of guestRules) {
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
 
       // Aggregate impact (take highest severity)
-      if (rule.impact) {
-        if (
-          rule.impact.risk &&
-          riskPriority[rule.impact.risk] > riskPriority[guestImpact.risk]
-        ) {
-          guestImpact.risk = rule.impact.risk;
-          guestImpact.reason = rule.impact.reason;
-        }
-        if (rule.impact.affectedComponents) {
-          guestImpact.affectedComponents = [
-            ...new Set([
-              ...guestImpact.affectedComponents,
-              ...rule.impact.affectedComponents,
-            ]),
-          ];
-        }
+      if (
+        rule.impact.risk &&
+        riskPriority[rule.impact.risk] > riskPriority[guestImpact.risk]
+      ) {
+        guestImpact.risk = rule.impact.risk;
+        guestImpact.reason = rule.impact.reason;
+      }
+      if (rule.impact.affectedComponents) {
+        guestImpact.affectedComponents = [
+          ...new Set([
+            ...guestImpact.affectedComponents,
+            ...rule.impact.affectedComponents,
+          ]),
+        ];
       }
 
       // Collect mitigations
-      if (rule.mitigations) {
-        rule.mitigations.forEach((m) => mitigationIds.add(m));
-      }
+      rule.mitigations.forEach((m) => mitigationIds.add(m));
     }
   }
 
@@ -332,6 +349,11 @@ export function getActionDisplayName(actionType: Action["type"], action?: Action
     return `${operation} Disk Encryption (${target})`;
   }
 
+  // Handle capture with generalize option
+  if (actionType === "CaptureVM" && action?.generalize !== undefined) {
+    return action.generalize ? "Capture VM (Generalized)" : "Capture VM (Specialized)";
+  }
+
   const names: Record<Action["type"], string> = {
     ResizeVM: "Resize VM",
     ResizeOSDisk: "Resize OS Disk",
@@ -341,6 +363,11 @@ export function getActionDisplayName(actionType: Action["type"], action?: Action
     EnableEncryption: "Disk Encryption",
     ChangeZone: "Change Availability Zone",
     CrossRegionMove: "Cross-Region Move",
+    StopVM: "Stop VM",
+    DeallocateVM: "Deallocate VM",
+    CaptureVM: "Capture VM",
+    AddNIC: "Add Network Interface",
+    RemoveNIC: "Remove Network Interface",
   };
   return names[actionType];
 }

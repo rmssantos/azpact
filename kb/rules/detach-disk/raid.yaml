@@ -1,0 +1,62 @@
+# RAID Disk Detach rules
+# Rules for detaching disks from RAID arrays
+
+- id: raid0-disk-detach-critical
+  name: RAID0 Disk Detach
+  description: Detaching a disk from a RAID0 array
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: raid0
+  impact:
+    risk: critical
+    reason: >
+      RAID0 has no redundancy. Removing any disk will destroy the entire array and cause complete data loss.
+    affectedComponents: ["RAID Array", "All data on array"]
+  mitigations: [backup-vm, snapshot-data-disks, stop-applications]
+  sources:
+    - title: "Linux Software RAID"
+      url: "https://docs.kernel.org/admin-guide/md.html"
+
+- id: raid1-disk-detach-high
+  name: RAID1 Disk Detach
+  description: Detaching a disk from a RAID1 array
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: raid1
+  impact:
+    risk: high
+    reason: >
+      RAID1 will continue operating in degraded mode but with no redundancy. A second disk failure will cause data loss.
+    affectedComponents: ["RAID Array redundancy"]
+  mitigations: [check-raid-health, fail-disk-from-raid, stop-applications]
+  sources:
+    - title: "Linux Software RAID"
+      url: "https://docs.kernel.org/admin-guide/md.html"
+
+- id: raid5-disk-detach-high
+  name: RAID5 Disk Detach
+  description: Detaching a disk from a RAID5 array
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: raid5
+  impact:
+    risk: high
+    reason: >
+      RAID5 will continue operating in degraded mode. Performance will decrease and another disk failure will cause data loss.
+    affectedComponents: ["RAID Array redundancy", "I/O performance"]
+  mitigations: [check-raid-health, fail-disk-from-raid, stop-applications]
+  sources:
+    - title: "Linux Software RAID"
+      url: "https://docs.kernel.org/admin-guide/md.html"

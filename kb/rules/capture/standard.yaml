@@ -1,0 +1,121 @@
+# Capture VM Rules
+
+# Capture VM - Generalized (Windows)
+- id: capture-vm-generalized-windows
+  name: Generalized capture (Windows)
+  description: Capturing a generalized Windows VM image
+  type: rule
+  layer: guest
+  actions: [CaptureVM]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Windows
+    - field: action.generalize
+      operator: eq
+      value: true
+  impact:
+    risk: critical
+    reason: >
+      Creating a generalized Windows image requires running Sysprep.
+      This process removes machine-specific information and resets the
+      administrator password. THE SOURCE VM WILL BECOME UNUSABLE after
+      generalization and must be deleted.
+    affectedComponents:
+      - sysprep
+      - administrator-account
+      - machine-sid
+      - hostname
+  mitigations:
+    - backup-vm
+    - snapshot-os-disk
+    - run-sysprep
+  sources:
+    - title: "Azure Docs - Create a managed image"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/capture-image-resource"
+    - title: "Azure Docs - Sysprep"
+      url: "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/sysprep-process-overview"
+
+# Capture VM - Generalized (Linux)
+- id: capture-vm-generalized-linux
+  name: Generalized capture (Linux)
+  description: Capturing a generalized Linux VM image
+  type: rule
+  layer: guest
+  actions: [CaptureVM]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Linux
+    - field: action.generalize
+      operator: eq
+      value: true
+  impact:
+    risk: critical
+    reason: >
+      Creating a generalized Linux image requires running waagent -deprovision+user.
+      This removes user accounts, SSH host keys, and machine-specific configuration.
+      THE SOURCE VM WILL BECOME UNUSABLE after generalization.
+    affectedComponents:
+      - waagent
+      - user-accounts
+      - ssh-keys
+      - hostname
+  mitigations:
+    - backup-vm
+    - snapshot-os-disk
+    - run-waagent-deprovision
+  sources:
+    - title: "Azure Docs - Create a managed image of a Linux VM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/capture-image"
+    - title: "Azure Docs - Azure Linux Agent"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-linux"
+
+# Capture VM - Specialized
+- id: capture-vm-specialized
+  name: Specialized capture
+  description: Capturing a specialized VM image (clone)
+  type: rule
+  layer: infra
+  actions: [CaptureVM]
+  conditions:
+    - field: action.generalize
+      operator: eq
+      value: false
+  impact:
+    reboot: none
+    downtime: low
+    reason: >
+      Creating a specialized image preserves the VM identity. The source VM
+      remains usable after capture. New VMs from this image will have identical
+      hostname, users, and configuration. Good for disaster recovery scenarios.
+  mitigations:
+    - stop-vm-gracefully
+    - snapshot-os-disk
+  sources:
+    - title: "Azure Docs - Create a VM from a specialized image"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/create-vm-specialized"
+
+# Capture VM requires stopped VM
+- id: capture-vm-requires-stopped
+  name: VM must be stopped for capture
+  description: Capture operation requires the VM to be stopped
+  type: rule
+  layer: infra
+  actions: [CaptureVM]
+  conditions:
+    - field: vm.running
+      operator: eq
+      value: true
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      The VM must be stopped (deallocated) before capturing an image.
+      This ensures disk consistency. Running VMs cannot be captured.
+  mitigations:
+    - stop-vm-gracefully
+    - deallocate-vm
+  sources:
+    - title: "Azure Docs - Capture an image"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/capture-image-portal"

@@ -47,7 +47,12 @@ export type ActionType =
   | "RedeployVM"
   | "EnableEncryption"
   | "ChangeZone"
-  | "CrossRegionMove";
+  | "CrossRegionMove"
+  | "StopVM"
+  | "DeallocateVM"
+  | "CaptureVM"
+  | "AddNIC"
+  | "RemoveNIC";
 
 export interface Action {
   type: ActionType;
@@ -57,6 +62,10 @@ export interface Action {
   // Encryption-specific options
   encryptionOperation?: "enable" | "disable";
   encryptionTarget?: "os" | "all";
+  // Capture-specific options
+  generalize?: boolean;
+  // NIC-specific options
+  nicCount?: number;
 }
 
 // Impact Types
@@ -80,8 +89,11 @@ export interface Mitigation {
   id: string;
   title: string;
   description: string;
+  phase: "before" | "during" | "after";
   required: boolean;
+  platforms: ("Windows" | "Linux" | "all")[];
   docUrl?: string;
+  steps?: string[];
 }
 
 export interface ImpactReport {
@@ -97,26 +109,43 @@ export interface ImpactReport {
 // Rule Types
 export interface RuleCondition {
   field: string;
-  operator: "eq" | "ne" | "in" | "notIn" | "exists" | "gt" | "lt";
+  operator: "eq" | "ne" | "in" | "nin" | "exists" | "notExists" | "gt" | "gte" | "lt" | "lte" | "matches";
   value: unknown;
+}
+
+export interface RuleSource {
+  title: string;
+  url: string;
 }
 
 export interface Rule {
   id: string;
   name: string;
   description: string;
-  category: "infra" | "guest" | "blocker";
+  type: "rule" | "blocker" | "override";
+  layer: "infra" | "guest";
   actions: ActionType[];
   conditions: RuleCondition[];
-  impact?: {
+  overrideTargets?: string[];
+  impact: {
     reboot?: RebootLevel;
     downtime?: DowntimeLevel;
     risk?: RiskLevel;
     reason: string;
     affectedComponents?: string[];
   };
-  mitigations?: string[];
+  mitigations: string[];
+  confidence?: "high" | "medium" | "low";
+  sources?: RuleSource[];
+  tags?: string[];
+  version?: string;
+  deprecated?: boolean;
+  deprecatedBy?: string;
+  deprecatedAt?: string;
 }
+
+// Legacy alias for backwards compatibility during migration
+export type RuleCategory = "infra" | "guest" | "blocker";
 
 // SKU and Image Types
 export type ProcessorType = "Intel" | "AMD" | "ARM";

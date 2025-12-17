@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle,
@@ -12,6 +13,9 @@ import {
   BookOpen,
   FileText,
   Bookmark,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { ImpactReport as ImpactReportType, ActionType } from "@/types";
 import { ImpactBadge } from "./ImpactBadge";
@@ -22,7 +26,30 @@ interface ImpactReportProps {
   actionType?: ActionType;
 }
 
+// Severity legend explanations
+const severityLegend = {
+  reboot: {
+    none: "No reboot required - operation completes without restart",
+    possible: "Reboot may occur - depends on specific conditions",
+    likely: "Reboot expected - plan for brief interruption",
+    guaranteed: "Reboot required - VM will definitely restart",
+  },
+  downtime: {
+    none: "No downtime - service remains available",
+    low: "Brief interruption - seconds to a minute",
+    medium: "Moderate downtime - several minutes expected",
+    high: "Extended downtime - significant service interruption",
+  },
+  risk: {
+    low: "Low risk - standard operation with minimal concerns",
+    medium: "Medium risk - take precautions, backup recommended",
+    high: "High risk - potential data impact, backup required",
+    critical: "Critical risk - data loss possible, verify backups first",
+  },
+};
+
 export function ImpactReport({ report, actionType }: ImpactReportProps) {
+  const [showLegend, setShowLegend] = useState(false);
   const actionArticles = actionType ? getArticlesForAction(actionType) : [];
   const generalArticles = getGeneralArticles();
   if (report.blocked) {
@@ -72,6 +99,80 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
           <ImpactBadge type="downtime" level={report.infra.downtime} />
           <ImpactBadge type="risk" level={report.guest.risk} />
         </div>
+
+        {/* Severity Legend Toggle */}
+        <button
+          onClick={() => setShowLegend(!showLegend)}
+          className="mt-4 flex items-center gap-1 text-sm text-gray-400 hover:text-gray-300 transition-colors"
+        >
+          <HelpCircle className="w-4 h-4" />
+          What do these levels mean?
+          {showLegend ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {/* Legend Content */}
+        {showLegend && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 pt-4 border-t border-gray-700 space-y-4"
+          >
+            {/* Reboot Legend */}
+            <div>
+              <p className="text-sm font-medium text-gray-300 mb-2">Reboot</p>
+              <div className="grid gap-1 text-xs">
+                {Object.entries(severityLegend.reboot).map(([level, desc]) => (
+                  <div key={level} className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded ${
+                      level === "none" ? "bg-emerald-900/50 text-emerald-300" :
+                      level === "possible" ? "bg-yellow-900/50 text-yellow-300" :
+                      level === "likely" ? "bg-orange-900/50 text-orange-300" :
+                      "bg-red-900/50 text-red-300"
+                    }`}>{level}</span>
+                    <span className="text-gray-400">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Downtime Legend */}
+            <div>
+              <p className="text-sm font-medium text-gray-300 mb-2">Downtime</p>
+              <div className="grid gap-1 text-xs">
+                {Object.entries(severityLegend.downtime).map(([level, desc]) => (
+                  <div key={level} className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded ${
+                      level === "none" ? "bg-emerald-900/50 text-emerald-300" :
+                      level === "low" ? "bg-yellow-900/50 text-yellow-300" :
+                      level === "medium" ? "bg-orange-900/50 text-orange-300" :
+                      "bg-red-900/50 text-red-300"
+                    }`}>{level}</span>
+                    <span className="text-gray-400">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Risk Legend */}
+            <div>
+              <p className="text-sm font-medium text-gray-300 mb-2">Risk</p>
+              <div className="grid gap-1 text-xs">
+                {Object.entries(severityLegend.risk).map(([level, desc]) => (
+                  <div key={level} className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded ${
+                      level === "low" ? "bg-emerald-900/50 text-emerald-300" :
+                      level === "medium" ? "bg-yellow-900/50 text-yellow-300" :
+                      level === "high" ? "bg-orange-900/50 text-orange-300" :
+                      "bg-red-900/50 text-red-300"
+                    }`}>{level}</span>
+                    <span className="text-gray-400">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Infrastructure Impact */}

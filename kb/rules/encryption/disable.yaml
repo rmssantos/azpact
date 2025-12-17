@@ -1,0 +1,71 @@
+# Azure Disk Encryption - Disable rules
+# Rules for disabling ADE on VMs
+
+- id: disable-ade-linux
+  name: Disable Azure Disk Encryption (Linux)
+  description: Disable ADE on Linux VM
+  type: rule
+  layer: infra
+  actions: [EnableEncryption]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Linux
+    - field: action.encryptionOperation
+      operator: eq
+      value: disable
+  impact:
+    reboot: possible
+    downtime: low
+    reason: >
+      Disabling Azure Disk Encryption on Linux data disks can be done online. However, disabling encryption on the OS disk requires a reboot. Decryption runs in the background.
+  mitigations: [backup-vm, stop-applications]
+  sources:
+    - title: "Disable Disk Encryption - Linux"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-linux"
+
+- id: disable-ade-windows
+  name: Disable Azure Disk Encryption (Windows)
+  description: Disable ADE on Windows VM
+  type: rule
+  layer: infra
+  actions: [EnableEncryption]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Windows
+    - field: action.encryptionOperation
+      operator: eq
+      value: disable
+  impact:
+    reboot: possible
+    downtime: low
+    reason: >
+      Disabling Azure Disk Encryption removes BitLocker protection. Data disk decryption can be done online, but OS disk may require a reboot. Decryption runs in the background.
+  mitigations: [backup-vm, stop-applications]
+  sources:
+    - title: "Disable Disk Encryption - Windows"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/disk-encryption-windows"
+
+- id: disable-encryption-data-disks
+  name: Disable Data Disk Encryption
+  description: Removing encryption from data disks
+  type: rule
+  layer: guest
+  actions: [EnableEncryption]
+  conditions:
+    - field: disks.count
+      operator: gt
+      value: 0
+    - field: action.encryptionOperation
+      operator: eq
+      value: disable
+  impact:
+    risk: low
+    reason: >
+      Data disks will be decrypted. The decryption process runs in the background and may take 1-2 hours depending on disk size. Data remains accessible during decryption.
+    affectedComponents: ["All data disks"]
+  mitigations: [backup-vm]
+  sources:
+    - title: "Azure Disk Encryption FAQ"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-faq"

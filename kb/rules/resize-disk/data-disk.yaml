@@ -1,0 +1,102 @@
+# Data Disk Resize rules
+# Rules for resizing data disks
+
+- id: data-disk-online-resize
+  name: Data Disk Online Resize
+  description: Data disk can be resized without VM restart
+  type: rule
+  layer: infra
+  actions: [ResizeDataDisk]
+  conditions:
+    - field: disk.type
+      operator: ne
+      value: UltraSSD_LRS
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Data disk resize can be performed online without stopping the VM. Guest OS action required to extend filesystem.
+  mitigations: [snapshot-data-disks]
+  sources:
+    - title: "Expand Virtual Hard Disks"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+
+- id: ultra-ssd-online-resize
+  name: Ultra SSD Online Resize
+  description: Ultra SSD can be resized online with specific conditions
+  type: rule
+  layer: infra
+  actions: [ResizeDataDisk]
+  conditions:
+    - field: disk.type
+      operator: eq
+      value: UltraSSD_LRS
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Ultra SSD disk resize can be performed online. You can also adjust IOPS and throughput without detaching the disk. Guest OS action required to extend filesystem.
+  mitigations: [snapshot-data-disks]
+  sources:
+    - title: "Ultra Disks for Azure VMs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks"
+
+- id: lvm-disk-resize
+  name: LVM Disk Resize
+  description: Resizing a disk that is an LVM physical volume
+  type: rule
+  layer: guest
+  actions: [ResizeDataDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: lvm
+  impact:
+    risk: low
+    reason: >
+      Disk resize is safe but requires pvresize to recognize the new space, followed by lvextend and filesystem resize.
+    affectedComponents: ["Physical Volume", "Volume Group capacity"]
+  mitigations: [snapshot-data-disks, extend-lv-after-resize]
+  sources:
+    - title: "Expand Linux Disks with LVM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+
+- id: raid-disk-resize
+  name: RAID Array Disk Resize
+  description: Resizing a disk that is part of a RAID array
+  type: rule
+  layer: guest
+  actions: [ResizeDataDisk]
+  conditions:
+    - field: disk.topology
+      operator: in
+      value: [raid0, raid1, raid5]
+  impact:
+    risk: medium
+    reason: >
+      Disk resize is possible but RAID arrays require all member disks to be the same size. You must resize ALL disks in the array, then use mdadm --grow to expand the array, followed by filesystem resize.
+    affectedComponents: ["RAID Array", "Filesystem"]
+  mitigations: [snapshot-data-disks, check-raid-health]
+  sources:
+    - title: "Linux Software RAID"
+      url: "https://docs.kernel.org/admin-guide/md.html"
+
+- id: storage-spaces-disk-resize
+  name: Storage Spaces Disk Resize
+  description: Resizing a disk in a Storage Spaces pool
+  type: rule
+  layer: guest
+  actions: [ResizeDataDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: storage-spaces
+  impact:
+    risk: low
+    reason: >
+      Disk resize is safe. After resize, use Server Manager or PowerShell to extend the virtual disk and volume to use the additional space.
+    affectedComponents: ["Storage Pool capacity"]
+  mitigations: [snapshot-data-disks]
+  sources:
+    - title: "Storage Spaces Overview"
+      url: "https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/overview"

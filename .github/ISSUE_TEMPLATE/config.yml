@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing Guide
+    url: https://github.com/rmssantos/azpact/blob/main/CONTRIBUTING.md
+    about: Read this before contributing rules or mitigations
+  - name: Azure Documentation
+    url: https://learn.microsoft.com/en-us/azure/virtual-machines/
+    about: Official Azure VM documentation

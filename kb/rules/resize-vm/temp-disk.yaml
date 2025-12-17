@@ -1,0 +1,60 @@
+# Temp Disk rules for VM Resize
+# Rules for when temp disk size changes during resize
+
+- id: resize-temp-disk-change-windows
+  name: Temp Disk Size Change (Windows)
+  description: Target SKU has different temp disk size on Windows
+  type: rule
+  layer: guest
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: true
+    - field: targetSku.tempDiskGB
+      operator: gt
+      value: 0
+    - field: vm.tempDiskSize
+      operator: ne
+      value: targetSku.tempDiskGB
+    - field: os.family
+      operator: eq
+      value: Windows
+  impact:
+    risk: medium
+    reason: >
+      Target SKU has a different temp disk size. All temp disk data will be lost during resize. Ensure page file is configured correctly.
+    affectedComponents: ["Temp disk (D:)", "Page file"]
+  mitigations: [backup-temp-disk-data, move-pagefile]
+  sources:
+    - title: "Temporary Disk Overview"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+
+- id: resize-temp-disk-change-linux
+  name: Temp Disk Size Change (Linux)
+  description: Target SKU has different temp disk size on Linux
+  type: rule
+  layer: guest
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: true
+    - field: targetSku.tempDiskGB
+      operator: gt
+      value: 0
+    - field: vm.tempDiskSize
+      operator: ne
+      value: targetSku.tempDiskGB
+    - field: os.family
+      operator: eq
+      value: Linux
+  impact:
+    risk: medium
+    reason: >
+      Target SKU has a different temp disk size. All temp disk data will be lost during resize. Review swap configuration if using temp disk for swap.
+    affectedComponents: ["Temp disk (/dev/sdb)", "Swap partition"]
+  mitigations: [backup-temp-disk-data]
+  sources:
+    - title: "Temporary Disk Overview"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"

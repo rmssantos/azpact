@@ -1,0 +1,62 @@
+# Windows Storage Spaces Disk Detach rules
+# Rules for detaching disks from Storage Spaces pools
+
+- id: storage-spaces-disk-detach-critical
+  name: Storage Spaces Disk Detach
+  description: Detaching a disk from a Storage Spaces pool
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: storage-spaces
+  impact:
+    risk: critical
+    reason: >
+      This disk is part of a Storage Spaces pool. Detaching it may cause data loss depending on the pool's resiliency settings. Simple spaces have no redundancy.
+    affectedComponents: ["Storage Pool", "Virtual Disks", "Volumes"]
+  mitigations: [stop-applications, offline-disk-windows]
+  sources:
+    - title: "Storage Spaces Overview"
+      url: "https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/overview"
+
+- id: striped-disk-detach-critical
+  name: Striped Volume Disk Detach
+  description: Detaching a disk from a striped volume
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: striped
+  impact:
+    risk: critical
+    reason: >
+      Striped volumes (RAID0 equivalent) have no redundancy. Removing any disk will destroy the entire volume and cause complete data loss.
+    affectedComponents: ["Striped Volume", "All data on volume"]
+  mitigations: [backup-vm, snapshot-data-disks, stop-applications]
+  sources:
+    - title: "Dynamic Disks"
+      url: "https://learn.microsoft.com/en-us/windows-server/storage/disk-management/overview-of-disk-management"
+
+- id: mirrored-disk-detach-high
+  name: Mirrored Volume Disk Detach
+  description: Detaching a disk from a mirrored volume
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: mirrored
+  impact:
+    risk: high
+    reason: >
+      Mirrored volumes (RAID1 equivalent) will continue operating but with no redundancy. A second disk failure will cause data loss.
+    affectedComponents: ["Mirror redundancy"]
+  mitigations: [stop-applications, offline-disk-windows]
+  sources:
+    - title: "Dynamic Disks"
+      url: "https://learn.microsoft.com/en-us/windows-server/storage/disk-management/overview-of-disk-management"

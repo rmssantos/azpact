@@ -1,0 +1,68 @@
+# Online Disk Detach rules
+# Rules for detaching disks while VM is running
+
+- id: detach-disk-online-linux
+  name: Online Disk Detach (Linux)
+  description: Disk detach while Linux VM is running
+  type: rule
+  layer: infra
+  actions: [DetachDisk]
+  conditions:
+    - field: vm.running
+      operator: eq
+      value: true
+    - field: os.family
+      operator: eq
+      value: Linux
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Data disk can be detached while VM is running, but the filesystem must be unmounted first.
+  mitigations: [unmount-filesystem, remove-fstab-entry]
+  sources:
+    - title: "Detach Data Disk - Linux"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/detach-disk"
+
+- id: detach-disk-online-windows
+  name: Online Disk Detach (Windows)
+  description: Disk detach while Windows VM is running
+  type: rule
+  layer: infra
+  actions: [DetachDisk]
+  conditions:
+    - field: vm.running
+      operator: eq
+      value: true
+    - field: os.family
+      operator: eq
+      value: Windows
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Data disk can be detached while VM is running, but the disk must be set offline in Disk Management first.
+  mitigations: [offline-disk-windows]
+  sources:
+    - title: "Detach Data Disk - Windows"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"
+
+- id: detach-disk-offline
+  name: Offline Disk Detach
+  description: Disk detach while VM is stopped/deallocated
+  type: rule
+  layer: infra
+  actions: [DetachDisk]
+  conditions:
+    - field: vm.running
+      operator: eq
+      value: false
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Disk can be safely detached while VM is stopped. No guest OS actions required. Remember to update fstab (Linux) or verify disk configuration (Windows) before starting the VM.
+  mitigations: []
+  sources:
+    - title: "Detach Data Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"

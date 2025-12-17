@@ -1,0 +1,126 @@
+# Network Interface Rules
+
+# Add NIC - Standard rule
+- id: add-nic-standard
+  name: Add network interface
+  description: Attaching a new NIC to a VM
+  type: rule
+  layer: infra
+  actions: [AddNIC]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Adding a network interface requires the VM to be stopped (deallocated).
+      The VM will need to restart after the NIC is attached.
+      Ensure the new NIC is in a compatible subnet.
+  mitigations:
+    - stop-vm-gracefully
+    - deallocate-vm
+    - verify-nic-subnet
+  sources:
+    - title: "Azure Docs - Add or remove network interfaces"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm"
+
+# Add NIC - Guest OS configuration required
+- id: add-nic-guest-config
+  name: Guest OS NIC configuration
+  description: New NIC requires guest OS configuration
+  type: rule
+  layer: guest
+  actions: [AddNIC]
+  conditions: []
+  impact:
+    risk: medium
+    reason: >
+      After adding a NIC, the guest OS may need configuration to use it.
+      Linux may require network manager configuration. Windows should
+      auto-detect the new adapter but may need IP configuration.
+    affectedComponents:
+      - network-manager
+      - ip-configuration
+      - routing-tables
+  mitigations:
+    - configure-network-manager
+    - configure-ip-settings
+  sources:
+    - title: "Azure Docs - Configure multiple NICs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/multiple-nics"
+
+# Remove NIC - Standard rule
+- id: remove-nic-standard
+  name: Remove network interface
+  description: Detaching a NIC from a VM
+  type: rule
+  layer: infra
+  actions: [RemoveNIC]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Removing a network interface requires the VM to be stopped (deallocated).
+      The VM will need to restart after the NIC is detached.
+      Applications using this NIC will lose connectivity.
+  mitigations:
+    - stop-vm-gracefully
+    - deallocate-vm
+    - migrate-workloads
+  sources:
+    - title: "Azure Docs - Add or remove network interfaces"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm"
+
+# Remove NIC - Cannot remove primary
+- id: remove-nic-primary-blocker
+  name: Cannot remove primary NIC
+  description: Primary network interface cannot be removed
+  type: blocker
+  layer: infra
+  actions: [RemoveNIC]
+  conditions:
+    - field: action.nicCount
+      operator: eq
+      value: 1
+  impact:
+    reboot: none
+    downtime: none
+    reason: >
+      Cannot remove the primary network interface. A VM must have at least
+      one NIC attached. To change the primary NIC, add a new NIC first,
+      then remove the old one.
+  mitigations: []
+  sources:
+    - title: "Azure Docs - Network interfaces"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface"
+
+# Remove NIC - Application impact
+- id: remove-nic-app-impact
+  name: NIC removal affects applications
+  description: Removing NIC will disconnect applications using it
+  type: rule
+  layer: guest
+  actions: [RemoveNIC]
+  conditions:
+    - field: action.nicCount
+      operator: gt
+      value: 1
+  impact:
+    risk: high
+    reason: >
+      Applications bound to this NIC's IP address will lose connectivity.
+      Services listening on this interface will become unavailable.
+      Database connections, load balancer health probes, and inter-VM
+      communication may be affected.
+    affectedComponents:
+      - application-bindings
+      - load-balancer
+      - health-probes
+      - inter-vm-communication
+  mitigations:
+    - stop-applications
+    - migrate-workloads
+    - update-load-balancer
+  sources:
+    - title: "Azure Docs - Multiple NICs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/multiple-nics"

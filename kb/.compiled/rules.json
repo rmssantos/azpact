@@ -1,0 +1,2079 @@
+[
+  {
+    "id": "zone-to-zone-migration",
+    "name": "Zone-to-Zone Migration",
+    "description": "Moving VM from one zone to another zone",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ChangeZone"
+    ],
+    "conditions": [
+      {
+        "field": "vm.zonal",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "high",
+      "reason": "Moving a VM between Availability Zones (e.g., Zone 1 to Zone 2) is a manual process. You must: 1) Create snapshots of all disks, 2) Delete the VM (keeping disks), 3) Recreate the VM in the target zone using the snapshots. There is no direct migration path or portal option for zone-to-zone moves. Expect significant downtime.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "snapshot-data-disks",
+      "notify-users",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Move VMs to Another Zone",
+        "url": "https://learn.microsoft.com/en-us/azure/site-recovery/move-azure-vms-avset-azone"
+      }
+    ]
+  },
+  {
+    "id": "regional-to-zonal-migration",
+    "name": "Regional to Zonal Migration",
+    "description": "Adding availability zone to non-zonal VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ChangeZone"
+    ],
+    "conditions": [
+      {
+        "field": "vm.zonal",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Converting a regional (non-zonal) VM to a zonal deployment is fully supported. Simplest method: Use the Azure portal's 'Edit Availability' feature to select the target zone - Azure creates a snapshot, deploys a new zonal VM, and stops the original. Alternative: Use Azure Site Recovery for minimal downtime. Note: A new NIC and potentially new Public IP will be created.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "use-portal-zone-move",
+      "use-site-recovery",
+      "notify-users",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Move Regional VMs to Zonal",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/move-virtual-machines-regional-zonal-portal"
+      }
+    ]
+  },
+  {
+    "id": "regional-to-zonal-resources",
+    "name": "Resource Changes on Zone Move",
+    "description": "New resources created during regional to zonal migration",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ChangeZone"
+    ],
+    "conditions": [
+      {
+        "field": "vm.zonal",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "impact": {
+      "risk": "medium",
+      "reason": "When moving from regional to zonal deployment, a new Network Interface Card (NIC) and potentially a new Public IP address are created. Update any scripts, firewall rules, or DNS records that reference the old resources. The original VM must be deleted after migration to avoid double billing.\n",
+      "affectedComponents": [
+        "Network Interface",
+        "Public IP",
+        "DNS records"
+      ]
+    },
+    "mitigations": [
+      "notify-users"
+    ],
+    "sources": [
+      {
+        "title": "Move Regional VMs to Zonal",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/move-virtual-machines-regional-zonal-portal"
+      }
+    ]
+  },
+  {
+    "id": "stop-vm-standard",
+    "name": "Stop VM",
+    "description": "Standard VM stop operation (hardware stays allocated)",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "StopVM"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Stopping a VM performs a graceful shutdown. The VM is stopped but hardware remains allocated. You continue to pay for compute resources. Temp disk data is preserved. Dynamic IPs remain assigned.\n"
+    },
+    "mitigations": [
+      "stop-applications",
+      "drain-connections"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Stop and start a VM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/stop-start"
+      }
+    ]
+  },
+  {
+    "id": "deallocate-vm-standard",
+    "name": "Deallocate VM",
+    "description": "Standard VM deallocation (releases hardware)",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "DeallocateVM"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Deallocating a VM releases the underlying hardware. This stops billing for compute but may take longer to restart as new hardware must be allocated. Dynamic public IPs will change on restart.\n"
+    },
+    "mitigations": [
+      "stop-applications",
+      "drain-connections",
+      "backup-vm"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Stop and deallocate VMs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/stop-start"
+      }
+    ]
+  },
+  {
+    "id": "deallocate-vm-temp-disk-loss",
+    "name": "Deallocate loses temp disk data",
+    "description": "Temp disk data is lost when VM is deallocated",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DeallocateVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "Your VM SKU has a temp disk. All data on the temp disk (D: on Windows, /dev/sdb on Linux) will be permanently lost when the VM is deallocated. This includes pagefile/swap and any application data stored there.\n",
+      "affectedComponents": [
+        "temp-disk",
+        "pagefile",
+        "swap"
+      ]
+    },
+    "mitigations": [
+      "backup-temp-disk-data",
+      "relocate-pagefile"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Temporary disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+      }
+    ]
+  },
+  {
+    "id": "deallocate-vm-dynamic-ip",
+    "name": "Dynamic IP changes on deallocate",
+    "description": "Dynamic public IPs will change after deallocation",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "DeallocateVM"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "If your VM uses a dynamic public IP address, it will be released when deallocated and a new IP will be assigned on restart. Static IPs are not affected. Update DNS records or consider using a static IP.\n"
+    },
+    "mitigations": [
+      "use-static-ip",
+      "update-dns"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Public IP addresses",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses"
+      }
+    ]
+  },
+  {
+    "id": "resize-temp-disk-change-windows",
+    "name": "Temp Disk Size Change (Windows)",
+    "description": "Target SKU has different temp disk size on Windows",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "targetSku.tempDiskGB",
+        "operator": "gt",
+        "value": 0
+      },
+      {
+        "field": "vm.tempDiskSize",
+        "operator": "ne",
+        "value": "targetSku.tempDiskGB"
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      }
+    ],
+    "impact": {
+      "risk": "medium",
+      "reason": "Target SKU has a different temp disk size. All temp disk data will be lost during resize. Ensure page file is configured correctly.\n",
+      "affectedComponents": [
+        "Temp disk (D:)",
+        "Page file"
+      ]
+    },
+    "mitigations": [
+      "backup-temp-disk-data",
+      "move-pagefile"
+    ],
+    "sources": [
+      {
+        "title": "Temporary Disk Overview",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+      }
+    ]
+  },
+  {
+    "id": "resize-temp-disk-change-linux",
+    "name": "Temp Disk Size Change (Linux)",
+    "description": "Target SKU has different temp disk size on Linux",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "targetSku.tempDiskGB",
+        "operator": "gt",
+        "value": 0
+      },
+      {
+        "field": "vm.tempDiskSize",
+        "operator": "ne",
+        "value": "targetSku.tempDiskGB"
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      }
+    ],
+    "impact": {
+      "risk": "medium",
+      "reason": "Target SKU has a different temp disk size. All temp disk data will be lost during resize. Review swap configuration if using temp disk for swap.\n",
+      "affectedComponents": [
+        "Temp disk (/dev/sdb)",
+        "Swap partition"
+      ]
+    },
+    "mitigations": [
+      "backup-temp-disk-data"
+    ],
+    "sources": [
+      {
+        "title": "Temporary Disk Overview",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+      }
+    ]
+  },
+  {
+    "id": "resize-same-family",
+    "name": "Same Family Resize",
+    "description": "Resizing within the same VM family",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.family",
+        "operator": "eq",
+        "value": "targetSku.family"
+      }
+    ],
+    "impact": {
+      "reboot": "likely",
+      "downtime": "low",
+      "reason": "Same-family resize typically requires a reboot but stays on the same hardware cluster.\n"
+    },
+    "mitigations": [
+      "stop-applications",
+      "drain-connections",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Resize a VM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+      }
+    ]
+  },
+  {
+    "id": "resize-cross-family",
+    "name": "Cross Family Resize",
+    "description": "Resizing to a different VM family",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.family",
+        "operator": "ne",
+        "value": "targetSku.family"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Cross-family resize requires VM reallocation to different hardware. The VM will be stopped and restarted.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "stop-vm-gracefully",
+      "stop-applications",
+      "drain-connections",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Resize a VM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+      }
+    ]
+  },
+  {
+    "id": "resize-requires-deallocation",
+    "name": "Resize Requires Deallocation",
+    "description": "Target SKU not available on current cluster",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "targetSku.requiresDeallocation",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "high",
+      "reason": "Target SKU requires full deallocation. The VM will get a new hardware allocation and potentially a new IP address if not using static IP.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "stop-vm-gracefully",
+      "deallocate-vm"
+    ],
+    "sources": [
+      {
+        "title": "Resize a VM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+      }
+    ]
+  },
+  {
+    "id": "resize-processor-change",
+    "name": "Processor Architecture Change",
+    "description": "Resizing between different processor architectures",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.processor",
+        "operator": "ne",
+        "value": "targetSku.processor"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Changing processor architecture requires VM reallocation to different hardware. The VM will be moved to a host with the new processor type. This is generally safe but verify application compatibility.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "stop-vm-gracefully",
+      "stop-applications",
+      "drain-connections",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Azure VM Processor Types",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes"
+      }
+    ]
+  },
+  {
+    "id": "os-disk-resize-reboot",
+    "name": "OS Disk Resize Requires Reboot",
+    "description": "OS disk resize requires VM restart",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeOSDisk"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "low",
+      "reason": "OS disk resize requires the VM to be stopped and deallocated. The VM will restart after the resize.\n"
+    },
+    "mitigations": [
+      "snapshot-os-disk",
+      "stop-vm-gracefully",
+      "deallocate-vm",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Expand OS Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+      }
+    ]
+  },
+  {
+    "id": "os-disk-resize-filesystem",
+    "name": "OS Disk Filesystem Extension",
+    "description": "OS disk resize requires filesystem extension",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeOSDisk"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "After OS disk resize, the partition and filesystem must be extended. Most modern Linux images handle this automatically on boot.\n",
+      "affectedComponents": [
+        "Root filesystem"
+      ]
+    },
+    "mitigations": [
+      "extend-filesystem",
+      "verify-mounts"
+    ],
+    "sources": [
+      {
+        "title": "Expand Linux OS Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+      }
+    ]
+  },
+  {
+    "id": "os-disk-resize-windows",
+    "name": "Windows OS Disk Extension",
+    "description": "Windows OS disk resize requires partition extension",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeOSDisk"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "After OS disk resize, use Disk Management to extend the C: volume into the new unallocated space.\n",
+      "affectedComponents": [
+        "C: drive"
+      ]
+    },
+    "mitigations": [
+      "extend-partition-windows",
+      "verify-disks-attached"
+    ],
+    "sources": [
+      {
+        "title": "Expand Windows OS Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+      }
+    ]
+  },
+  {
+    "id": "data-disk-online-resize",
+    "name": "Data Disk Online Resize",
+    "description": "Data disk can be resized without VM restart",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeDataDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.type",
+        "operator": "ne",
+        "value": "UltraSSD_LRS"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Data disk resize can be performed online without stopping the VM. Guest OS action required to extend filesystem.\n"
+    },
+    "mitigations": [
+      "snapshot-data-disks"
+    ],
+    "sources": [
+      {
+        "title": "Expand Virtual Hard Disks",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+      }
+    ]
+  },
+  {
+    "id": "ultra-ssd-online-resize",
+    "name": "Ultra SSD Online Resize",
+    "description": "Ultra SSD can be resized online with specific conditions",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "ResizeDataDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.type",
+        "operator": "eq",
+        "value": "UltraSSD_LRS"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Ultra SSD disk resize can be performed online. You can also adjust IOPS and throughput without detaching the disk. Guest OS action required to extend filesystem.\n"
+    },
+    "mitigations": [
+      "snapshot-data-disks"
+    ],
+    "sources": [
+      {
+        "title": "Ultra Disks for Azure VMs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks"
+      }
+    ]
+  },
+  {
+    "id": "lvm-disk-resize",
+    "name": "LVM Disk Resize",
+    "description": "Resizing a disk that is an LVM physical volume",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeDataDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "lvm"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "Disk resize is safe but requires pvresize to recognize the new space, followed by lvextend and filesystem resize.\n",
+      "affectedComponents": [
+        "Physical Volume",
+        "Volume Group capacity"
+      ]
+    },
+    "mitigations": [
+      "snapshot-data-disks",
+      "extend-lv-after-resize"
+    ],
+    "sources": [
+      {
+        "title": "Expand Linux Disks with LVM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+      }
+    ]
+  },
+  {
+    "id": "raid-disk-resize",
+    "name": "RAID Array Disk Resize",
+    "description": "Resizing a disk that is part of a RAID array",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeDataDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "in",
+        "value": [
+          "raid0",
+          "raid1",
+          "raid5"
+        ]
+      }
+    ],
+    "impact": {
+      "risk": "medium",
+      "reason": "Disk resize is possible but RAID arrays require all member disks to be the same size. You must resize ALL disks in the array, then use mdadm --grow to expand the array, followed by filesystem resize.\n",
+      "affectedComponents": [
+        "RAID Array",
+        "Filesystem"
+      ]
+    },
+    "mitigations": [
+      "snapshot-data-disks",
+      "check-raid-health"
+    ],
+    "sources": [
+      {
+        "title": "Linux Software RAID",
+        "url": "https://docs.kernel.org/admin-guide/md.html"
+      }
+    ]
+  },
+  {
+    "id": "storage-spaces-disk-resize",
+    "name": "Storage Spaces Disk Resize",
+    "description": "Resizing a disk in a Storage Spaces pool",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "ResizeDataDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "storage-spaces"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "Disk resize is safe. After resize, use Server Manager or PowerShell to extend the virtual disk and volume to use the additional space.\n",
+      "affectedComponents": [
+        "Storage Pool capacity"
+      ]
+    },
+    "mitigations": [
+      "snapshot-data-disks"
+    ],
+    "sources": [
+      {
+        "title": "Storage Spaces Overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/overview"
+      }
+    ]
+  },
+  {
+    "id": "redeploy-standard",
+    "name": "Standard Redeploy",
+    "description": "Standard redeploy operation moves VM to new Azure host",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RedeployVM"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Redeploy moves the VM to a new Azure host. Expect 5-15 minutes of downtime while the VM is stopped, moved to new hardware, and restarted.\n"
+    },
+    "mitigations": [
+      "stop-applications",
+      "drain-connections",
+      "notify-users",
+      "verify-applications"
+    ],
+    "confidence": "high",
+    "sources": [
+      {
+        "title": "Redeploy Virtual Machine - Azure Docs",
+        "url": "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/redeploy-to-new-node-windows"
+      }
+    ],
+    "tags": [
+      "redeploy",
+      "infra",
+      "downtime"
+    ]
+  },
+  {
+    "id": "redeploy-temp-disk-loss",
+    "name": "Temp Disk Data Loss on Redeploy",
+    "description": "Redeploy will wipe all temporary disk data",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RedeployVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "dataLossRisk": true,
+      "reason": "Redeploy moves the VM to new hardware. The temporary disk is local to the host and will be completely wiped. All data on D: (Windows) or /dev/sdb (Linux) will be permanently lost.\n"
+    },
+    "mitigations": [
+      "backup-temp-disk-data",
+      "backup-vm"
+    ],
+    "confidence": "high",
+    "sources": [
+      {
+        "title": "Temporary Disk - Azure Docs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+      }
+    ],
+    "tags": [
+      "redeploy",
+      "temp-disk",
+      "data-loss"
+    ]
+  },
+  {
+    "id": "add-nic-standard",
+    "name": "Add network interface",
+    "description": "Attaching a new NIC to a VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "AddNIC"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Adding a network interface requires the VM to be stopped (deallocated). The VM will need to restart after the NIC is attached. Ensure the new NIC is in a compatible subnet.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "deallocate-vm",
+      "verify-nic-subnet"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Add or remove network interfaces",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm"
+      }
+    ]
+  },
+  {
+    "id": "add-nic-guest-config",
+    "name": "Guest OS NIC configuration",
+    "description": "New NIC requires guest OS configuration",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "AddNIC"
+    ],
+    "conditions": [],
+    "impact": {
+      "risk": "medium",
+      "reason": "After adding a NIC, the guest OS may need configuration to use it. Linux may require network manager configuration. Windows should auto-detect the new adapter but may need IP configuration.\n",
+      "affectedComponents": [
+        "network-manager",
+        "ip-configuration",
+        "routing-tables"
+      ]
+    },
+    "mitigations": [
+      "configure-network-manager",
+      "configure-ip-settings"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Configure multiple NICs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/multiple-nics"
+      }
+    ]
+  },
+  {
+    "id": "remove-nic-standard",
+    "name": "Remove network interface",
+    "description": "Detaching a NIC from a VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RemoveNIC"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Removing a network interface requires the VM to be stopped (deallocated). The VM will need to restart after the NIC is detached. Applications using this NIC will lose connectivity.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "deallocate-vm",
+      "migrate-workloads"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Add or remove network interfaces",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface-vm"
+      }
+    ]
+  },
+  {
+    "id": "remove-nic-primary-blocker",
+    "name": "Cannot remove primary NIC",
+    "description": "Primary network interface cannot be removed",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "RemoveNIC"
+    ],
+    "conditions": [
+      {
+        "field": "action.nicCount",
+        "operator": "eq",
+        "value": 1
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Cannot remove the primary network interface. A VM must have at least one NIC attached. To change the primary NIC, add a new NIC first, then remove the old one.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Azure Docs - Network interfaces",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface"
+      }
+    ]
+  },
+  {
+    "id": "remove-nic-app-impact",
+    "name": "NIC removal affects applications",
+    "description": "Removing NIC will disconnect applications using it",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "RemoveNIC"
+    ],
+    "conditions": [
+      {
+        "field": "action.nicCount",
+        "operator": "gt",
+        "value": 1
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "Applications bound to this NIC's IP address will lose connectivity. Services listening on this interface will become unavailable. Database connections, load balancer health probes, and inter-VM communication may be affected.\n",
+      "affectedComponents": [
+        "application-bindings",
+        "load-balancer",
+        "health-probes",
+        "inter-vm-communication"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "migrate-workloads",
+      "update-load-balancer"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Multiple NICs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/multiple-nics"
+      }
+    ]
+  },
+  {
+    "id": "enable-ade-linux",
+    "name": "Enable Azure Disk Encryption (Linux)",
+    "description": "Enable ADE on Linux VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "enable"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Enabling Azure Disk Encryption requires the VM to be restarted. The encryption process runs in the background and may take 1-2 hours depending on disk size.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Azure Disk Encryption for Linux",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-overview"
+      }
+    ]
+  },
+  {
+    "id": "enable-ade-windows",
+    "name": "Enable Azure Disk Encryption (Windows)",
+    "description": "Enable ADE on Windows VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "enable"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Enabling Azure Disk Encryption requires the VM to be restarted. BitLocker will encrypt the drives. This process may take 1-2 hours depending on disk size.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Azure Disk Encryption for Windows",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/disk-encryption-overview"
+      }
+    ]
+  },
+  {
+    "id": "enable-encryption-data-disks",
+    "name": "Enable Data Disk Encryption",
+    "description": "Encrypting data disks",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "disks.count",
+        "operator": "gt",
+        "value": 0
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "enable"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "Data disks will also be encrypted. Ensure all mounted filesystems are properly configured and no I/O is in progress during encryption.\n",
+      "affectedComponents": [
+        "All data disks",
+        "Mounted filesystems"
+      ]
+    },
+    "mitigations": [
+      "snapshot-data-disks",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Azure Disk Encryption FAQ",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-faq"
+      }
+    ]
+  },
+  {
+    "id": "disable-ade-linux",
+    "name": "Disable Azure Disk Encryption (Linux)",
+    "description": "Disable ADE on Linux VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "disable"
+      }
+    ],
+    "impact": {
+      "reboot": "possible",
+      "downtime": "low",
+      "reason": "Disabling Azure Disk Encryption on Linux data disks can be done online. However, disabling encryption on the OS disk requires a reboot. Decryption runs in the background.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Disable Disk Encryption - Linux",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-linux"
+      }
+    ]
+  },
+  {
+    "id": "disable-ade-windows",
+    "name": "Disable Azure Disk Encryption (Windows)",
+    "description": "Disable ADE on Windows VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "disable"
+      }
+    ],
+    "impact": {
+      "reboot": "possible",
+      "downtime": "low",
+      "reason": "Disabling Azure Disk Encryption removes BitLocker protection. Data disk decryption can be done online, but OS disk may require a reboot. Decryption runs in the background.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Disable Disk Encryption - Windows",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/disk-encryption-windows"
+      }
+    ]
+  },
+  {
+    "id": "disable-encryption-data-disks",
+    "name": "Disable Data Disk Encryption",
+    "description": "Removing encryption from data disks",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "EnableEncryption"
+    ],
+    "conditions": [
+      {
+        "field": "disks.count",
+        "operator": "gt",
+        "value": 0
+      },
+      {
+        "field": "action.encryptionOperation",
+        "operator": "eq",
+        "value": "disable"
+      }
+    ],
+    "impact": {
+      "risk": "low",
+      "reason": "Data disks will be decrypted. The decryption process runs in the background and may take 1-2 hours depending on disk size. Data remains accessible during decryption.\n",
+      "affectedComponents": [
+        "All data disks"
+      ]
+    },
+    "mitigations": [
+      "backup-vm"
+    ],
+    "sources": [
+      {
+        "title": "Azure Disk Encryption FAQ",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-faq"
+      }
+    ]
+  },
+  {
+    "id": "storage-spaces-disk-detach-critical",
+    "name": "Storage Spaces Disk Detach",
+    "description": "Detaching a disk from a Storage Spaces pool",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "storage-spaces"
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "This disk is part of a Storage Spaces pool. Detaching it may cause data loss depending on the pool's resiliency settings. Simple spaces have no redundancy.\n",
+      "affectedComponents": [
+        "Storage Pool",
+        "Virtual Disks",
+        "Volumes"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "offline-disk-windows"
+    ],
+    "sources": [
+      {
+        "title": "Storage Spaces Overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/overview"
+      }
+    ]
+  },
+  {
+    "id": "striped-disk-detach-critical",
+    "name": "Striped Volume Disk Detach",
+    "description": "Detaching a disk from a striped volume",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "striped"
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "Striped volumes (RAID0 equivalent) have no redundancy. Removing any disk will destroy the entire volume and cause complete data loss.\n",
+      "affectedComponents": [
+        "Striped Volume",
+        "All data on volume"
+      ]
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-data-disks",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Dynamic Disks",
+        "url": "https://learn.microsoft.com/en-us/windows-server/storage/disk-management/overview-of-disk-management"
+      }
+    ]
+  },
+  {
+    "id": "mirrored-disk-detach-high",
+    "name": "Mirrored Volume Disk Detach",
+    "description": "Detaching a disk from a mirrored volume",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "mirrored"
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "Mirrored volumes (RAID1 equivalent) will continue operating but with no redundancy. A second disk failure will cause data loss.\n",
+      "affectedComponents": [
+        "Mirror redundancy"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "offline-disk-windows"
+    ],
+    "sources": [
+      {
+        "title": "Dynamic Disks",
+        "url": "https://learn.microsoft.com/en-us/windows-server/storage/disk-management/overview-of-disk-management"
+      }
+    ]
+  },
+  {
+    "id": "raid0-disk-detach-critical",
+    "name": "RAID0 Disk Detach",
+    "description": "Detaching a disk from a RAID0 array",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "raid0"
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "RAID0 has no redundancy. Removing any disk will destroy the entire array and cause complete data loss.\n",
+      "affectedComponents": [
+        "RAID Array",
+        "All data on array"
+      ]
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-data-disks",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Linux Software RAID",
+        "url": "https://docs.kernel.org/admin-guide/md.html"
+      }
+    ]
+  },
+  {
+    "id": "raid1-disk-detach-high",
+    "name": "RAID1 Disk Detach",
+    "description": "Detaching a disk from a RAID1 array",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "raid1"
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "RAID1 will continue operating in degraded mode but with no redundancy. A second disk failure will cause data loss.\n",
+      "affectedComponents": [
+        "RAID Array redundancy"
+      ]
+    },
+    "mitigations": [
+      "check-raid-health",
+      "fail-disk-from-raid",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Linux Software RAID",
+        "url": "https://docs.kernel.org/admin-guide/md.html"
+      }
+    ]
+  },
+  {
+    "id": "raid5-disk-detach-high",
+    "name": "RAID5 Disk Detach",
+    "description": "Detaching a disk from a RAID5 array",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "raid5"
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "RAID5 will continue operating in degraded mode. Performance will decrease and another disk failure will cause data loss.\n",
+      "affectedComponents": [
+        "RAID Array redundancy",
+        "I/O performance"
+      ]
+    },
+    "mitigations": [
+      "check-raid-health",
+      "fail-disk-from-raid",
+      "stop-applications"
+    ],
+    "sources": [
+      {
+        "title": "Linux Software RAID",
+        "url": "https://docs.kernel.org/admin-guide/md.html"
+      }
+    ]
+  },
+  {
+    "id": "detach-disk-online-linux",
+    "name": "Online Disk Detach (Linux)",
+    "description": "Disk detach while Linux VM is running",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "vm.running",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Data disk can be detached while VM is running, but the filesystem must be unmounted first.\n"
+    },
+    "mitigations": [
+      "unmount-filesystem",
+      "remove-fstab-entry"
+    ],
+    "sources": [
+      {
+        "title": "Detach Data Disk - Linux",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/detach-disk"
+      }
+    ]
+  },
+  {
+    "id": "detach-disk-online-windows",
+    "name": "Online Disk Detach (Windows)",
+    "description": "Disk detach while Windows VM is running",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "vm.running",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Data disk can be detached while VM is running, but the disk must be set offline in Disk Management first.\n"
+    },
+    "mitigations": [
+      "offline-disk-windows"
+    ],
+    "sources": [
+      {
+        "title": "Detach Data Disk - Windows",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"
+      }
+    ]
+  },
+  {
+    "id": "detach-disk-offline",
+    "name": "Offline Disk Detach",
+    "description": "Disk detach while VM is stopped/deallocated",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "vm.running",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Disk can be safely detached while VM is stopped. No guest OS actions required. Remember to update fstab (Linux) or verify disk configuration (Windows) before starting the VM.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Detach Data Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"
+      }
+    ]
+  },
+  {
+    "id": "lvm-pv-detach-critical",
+    "name": "LVM Physical Volume Detach",
+    "description": "Detaching a disk that is an LVM physical volume",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.topology",
+        "operator": "eq",
+        "value": "lvm"
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "This disk is part of an LVM volume group. Detaching it will cause data loss and potentially make the VG unusable.\n",
+      "affectedComponents": [
+        "Volume Group",
+        "Logical Volumes",
+        "Mounted Filesystems"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "unmount-filesystem",
+      "deactivate-vg",
+      "remove-pv-from-vg"
+    ],
+    "sources": [
+      {
+        "title": "LVM Administration Guide",
+        "url": "https://man7.org/linux/man-pages/man8/lvm.8.html"
+      }
+    ]
+  },
+  {
+    "id": "mounted-disk-detach-linux",
+    "name": "Mounted Disk Detach (Linux)",
+    "description": "Detaching a disk with mounted filesystem on Linux",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.mount",
+        "operator": "exists",
+        "value": true
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "Disk has an active mount point. Detaching without unmounting will cause filesystem corruption and potential data loss.\n",
+      "affectedComponents": [
+        "Filesystem",
+        "Applications using mount point"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "unmount-filesystem",
+      "remove-fstab-entry"
+    ],
+    "sources": [
+      {
+        "title": "Detach Data Disk - Linux",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/detach-disk"
+      }
+    ]
+  },
+  {
+    "id": "mounted-disk-detach-windows",
+    "name": "Mounted Disk Detach (Windows)",
+    "description": "Detaching a disk with active volume on Windows",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "DetachDisk"
+    ],
+    "conditions": [
+      {
+        "field": "disk.mount",
+        "operator": "exists",
+        "value": true
+      },
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      }
+    ],
+    "impact": {
+      "risk": "high",
+      "reason": "Disk has an active volume. Detaching without setting it offline will cause data loss and potential corruption.\n",
+      "affectedComponents": [
+        "Volume",
+        "Applications using drive letter"
+      ]
+    },
+    "mitigations": [
+      "stop-applications",
+      "offline-disk-windows"
+    ],
+    "sources": [
+      {
+        "title": "Detach Data Disk - Windows",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"
+      }
+    ]
+  },
+  {
+    "id": "cross-region-move",
+    "name": "Cross-Region VM Migration",
+    "description": "Moving VM to a different Azure region",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "CrossRegionMove"
+    ],
+    "conditions": [],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "high",
+      "reason": "Cross-region move requires creating disk snapshots, copying them to the target region, and recreating the VM. Recommended: Use Azure Resource Mover for centralized management, dependency identification, and cleanup. Alternative: Use Azure Site Recovery for replication-based migration with minimal cutover downtime. Expect 30+ minutes depending on disk sizes and region distance.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "snapshot-data-disks",
+      "use-resource-mover",
+      "use-site-recovery",
+      "notify-users",
+      "verify-applications"
+    ],
+    "sources": [
+      {
+        "title": "Azure Resource Mover",
+        "url": "https://learn.microsoft.com/en-us/azure/resource-mover/overview"
+      },
+      {
+        "title": "Move VMs to Another Region",
+        "url": "https://learn.microsoft.com/en-us/azure/site-recovery/azure-to-azure-tutorial-migrate"
+      }
+    ]
+  },
+  {
+    "id": "cross-region-ip-change",
+    "name": "IP Address Change on Region Move",
+    "description": "Public IP will change on region move",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "CrossRegionMove"
+    ],
+    "conditions": [],
+    "impact": {
+      "risk": "high",
+      "reason": "Public and private IP addresses will change after moving to a new region. Update DNS records, firewall rules, and application configurations accordingly.\n",
+      "affectedComponents": [
+        "Public IP",
+        "Private IP",
+        "DNS records",
+        "Firewall rules"
+      ]
+    },
+    "mitigations": [
+      "notify-users"
+    ],
+    "sources": [
+      {
+        "title": "Move VMs to Another Region",
+        "url": "https://learn.microsoft.com/en-us/azure/site-recovery/azure-to-azure-tutorial-migrate"
+      }
+    ]
+  },
+  {
+    "id": "cross-region-networking",
+    "name": "Network Configuration Changes",
+    "description": "Network settings need reconfiguration",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "CrossRegionMove"
+    ],
+    "conditions": [],
+    "impact": {
+      "risk": "medium",
+      "reason": "The VM will need to be connected to a VNet in the target region. NSGs, load balancers, and other networking components must be recreated or migrated separately.\n",
+      "affectedComponents": [
+        "Virtual Network",
+        "Subnet",
+        "NSG",
+        "Load Balancer"
+      ]
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Azure Resource Mover - Networking",
+        "url": "https://learn.microsoft.com/en-us/azure/resource-mover/overview"
+      }
+    ]
+  },
+  {
+    "id": "capture-vm-generalized-windows",
+    "name": "Generalized capture (Windows)",
+    "description": "Capturing a generalized Windows VM image",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "CaptureVM"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Windows"
+      },
+      {
+        "field": "action.generalize",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "Creating a generalized Windows image requires running Sysprep. This process removes machine-specific information and resets the administrator password. THE SOURCE VM WILL BECOME UNUSABLE after generalization and must be deleted.\n",
+      "affectedComponents": [
+        "sysprep",
+        "administrator-account",
+        "machine-sid",
+        "hostname"
+      ]
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "run-sysprep"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Create a managed image",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/capture-image-resource"
+      },
+      {
+        "title": "Azure Docs - Sysprep",
+        "url": "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/sysprep-process-overview"
+      }
+    ]
+  },
+  {
+    "id": "capture-vm-generalized-linux",
+    "name": "Generalized capture (Linux)",
+    "description": "Capturing a generalized Linux VM image",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "CaptureVM"
+    ],
+    "conditions": [
+      {
+        "field": "os.family",
+        "operator": "eq",
+        "value": "Linux"
+      },
+      {
+        "field": "action.generalize",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "Creating a generalized Linux image requires running waagent -deprovision+user. This removes user accounts, SSH host keys, and machine-specific configuration. THE SOURCE VM WILL BECOME UNUSABLE after generalization.\n",
+      "affectedComponents": [
+        "waagent",
+        "user-accounts",
+        "ssh-keys",
+        "hostname"
+      ]
+    },
+    "mitigations": [
+      "backup-vm",
+      "snapshot-os-disk",
+      "run-waagent-deprovision"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Create a managed image of a Linux VM",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/capture-image"
+      },
+      {
+        "title": "Azure Docs - Azure Linux Agent",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/agent-linux"
+      }
+    ]
+  },
+  {
+    "id": "capture-vm-specialized",
+    "name": "Specialized capture",
+    "description": "Capturing a specialized VM image (clone)",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "CaptureVM"
+    ],
+    "conditions": [
+      {
+        "field": "action.generalize",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "low",
+      "reason": "Creating a specialized image preserves the VM identity. The source VM remains usable after capture. New VMs from this image will have identical hostname, users, and configuration. Good for disaster recovery scenarios.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "snapshot-os-disk"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Create a VM from a specialized image",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/create-vm-specialized"
+      }
+    ]
+  },
+  {
+    "id": "capture-vm-requires-stopped",
+    "name": "VM must be stopped for capture",
+    "description": "Capture operation requires the VM to be stopped",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "CaptureVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.running",
+        "operator": "eq",
+        "value": true
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "The VM must be stopped (deallocated) before capturing an image. This ensures disk consistency. Running VMs cannot be captured.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "deallocate-vm"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Capture an image",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/capture-image-portal"
+      }
+    ]
+  },
+  {
+    "id": "blocker-gen2-to-gen1",
+    "name": "Generation Downgrade Blocked",
+    "description": "Cannot resize from Gen2 to Gen1-only SKU",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.generation",
+        "operator": "eq",
+        "value": "Gen2"
+      },
+      {
+        "field": "vm.generation",
+        "operator": "nin",
+        "value": "targetSku.generation"
+      }
+    ],
+    "impact": {
+      "reason": "Target SKU only supports Gen1 VMs. Your current VM is Gen2 and cannot be downgraded to Gen1.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Azure VM Sizes - Generation Support",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/generation-2"
+      }
+    ]
+  },
+  {
+    "id": "blocker-exceed-max-disks",
+    "name": "Max Data Disks Exceeded",
+    "description": "Target SKU has fewer max data disks than currently attached",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "disks.count",
+        "operator": "gt",
+        "value": "targetSku.maxDataDisks"
+      }
+    ],
+    "impact": {
+      "reason": "Target SKU supports fewer data disks than currently attached. Detach disks first.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "VM Sizes and Data Disk Limits",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes"
+      }
+    ]
+  },
+  {
+    "id": "blocker-ultra-ssd-not-supported",
+    "name": "Ultra SSD Not Supported",
+    "description": "Target SKU does not support Ultra SSD",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "disks.hasUltraSSD",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "targetSku.premiumIO",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "impact": {
+      "reason": "Target SKU does not support Ultra SSD. Detach Ultra SSD disks or choose a different SKU.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Ultra Disks - Supported VM Series",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks"
+      }
+    ]
+  },
+  {
+    "id": "blocker-temp-disk-to-no-temp-disk",
+    "name": "Temp Disk Configuration Mismatch",
+    "description": "Cannot resize from VM with temp disk to VM without temp disk",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": true
+      },
+      {
+        "field": "targetSku.tempDiskGB",
+        "operator": "eq",
+        "value": 0
+      }
+    ],
+    "impact": {
+      "reason": "Cannot resize from a VM with local temp disk to a VM without temp disk. Azure blocks this to prevent pagefile/swap issues. Workaround: Create a snapshot, then create a new VM from that snapshot with the target size.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Azure VMs with No Temp Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+      }
+    ]
+  },
+  {
+    "id": "blocker-no-temp-disk-to-temp-disk",
+    "name": "Temp Disk Configuration Mismatch",
+    "description": "Cannot resize from VM without temp disk to VM with temp disk",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.hasTempDisk",
+        "operator": "eq",
+        "value": false
+      },
+      {
+        "field": "targetSku.tempDiskGB",
+        "operator": "gt",
+        "value": 0
+      }
+    ],
+    "impact": {
+      "reason": "Cannot resize from a VM without local temp disk to a VM with temp disk. Azure blocks this due to storage configuration differences. Workaround: Create a snapshot, then create a new VM from that snapshot with the target size.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "Azure VMs with No Temp Disk",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+      }
+    ]
+  },
+  {
+    "id": "blocker-x86-to-arm",
+    "name": "x86 to ARM Architecture Blocked",
+    "description": "Cannot resize from x86/x64 to ARM architecture",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.processor",
+        "operator": "ne",
+        "value": "ARM"
+      },
+      {
+        "field": "targetSku.processor",
+        "operator": "eq",
+        "value": "ARM"
+      }
+    ],
+    "impact": {
+      "reason": "Cannot resize from x86/x64 to ARM architecture. ARM VMs require ARM-compatible OS images - the existing OS disk will not boot on ARM hardware. Workaround: Deploy a new ARM-based VM with an ARM-compatible image and migrate your data.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "ARM-based Azure VMs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/dpsv5-dpdsv5-series"
+      }
+    ]
+  },
+  {
+    "id": "blocker-arm-to-x86",
+    "name": "ARM to x86 Architecture Blocked",
+    "description": "Cannot resize from ARM to x86/x64 architecture",
+    "type": "blocker",
+    "layer": "infra",
+    "actions": [
+      "ResizeVM"
+    ],
+    "conditions": [
+      {
+        "field": "vm.processor",
+        "operator": "eq",
+        "value": "ARM"
+      },
+      {
+        "field": "targetSku.processor",
+        "operator": "ne",
+        "value": "ARM"
+      }
+    ],
+    "impact": {
+      "reason": "Cannot resize from ARM to x86/x64 architecture. x86 VMs require x86-compatible OS images - the existing ARM OS disk will not boot on x86 hardware. Workaround: Deploy a new x86-based VM with an x86-compatible image and migrate your data.\n"
+    },
+    "mitigations": [],
+    "sources": [
+      {
+        "title": "ARM-based Azure VMs",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/dpsv5-dpdsv5-series"
+      }
+    ]
+  }
+]

@@ -1,0 +1,71 @@
+# Azure Disk Encryption - Enable rules
+# Rules for enabling ADE on VMs
+
+- id: enable-ade-linux
+  name: Enable Azure Disk Encryption (Linux)
+  description: Enable ADE on Linux VM
+  type: rule
+  layer: infra
+  actions: [EnableEncryption]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Linux
+    - field: action.encryptionOperation
+      operator: eq
+      value: enable
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Enabling Azure Disk Encryption requires the VM to be restarted. The encryption process runs in the background and may take 1-2 hours depending on disk size.
+  mitigations: [backup-vm, snapshot-os-disk, stop-applications]
+  sources:
+    - title: "Azure Disk Encryption for Linux"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-overview"
+
+- id: enable-ade-windows
+  name: Enable Azure Disk Encryption (Windows)
+  description: Enable ADE on Windows VM
+  type: rule
+  layer: infra
+  actions: [EnableEncryption]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Windows
+    - field: action.encryptionOperation
+      operator: eq
+      value: enable
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Enabling Azure Disk Encryption requires the VM to be restarted. BitLocker will encrypt the drives. This process may take 1-2 hours depending on disk size.
+  mitigations: [backup-vm, snapshot-os-disk, stop-applications]
+  sources:
+    - title: "Azure Disk Encryption for Windows"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/disk-encryption-overview"
+
+- id: enable-encryption-data-disks
+  name: Enable Data Disk Encryption
+  description: Encrypting data disks
+  type: rule
+  layer: guest
+  actions: [EnableEncryption]
+  conditions:
+    - field: disks.count
+      operator: gt
+      value: 0
+    - field: action.encryptionOperation
+      operator: eq
+      value: enable
+  impact:
+    risk: low
+    reason: >
+      Data disks will also be encrypted. Ensure all mounted filesystems are properly configured and no I/O is in progress during encryption.
+    affectedComponents: ["All data disks", "Mounted filesystems"]
+  mitigations: [snapshot-data-disks, stop-applications]
+  sources:
+    - title: "Azure Disk Encryption FAQ"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-faq"

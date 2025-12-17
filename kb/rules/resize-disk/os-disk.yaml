@@ -1,0 +1,59 @@
+# OS Disk Resize rules
+# Rules for resizing the OS disk
+
+- id: os-disk-resize-reboot
+  name: OS Disk Resize Requires Reboot
+  description: OS disk resize requires VM restart
+  type: rule
+  layer: infra
+  actions: [ResizeOSDisk]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: low
+    reason: >
+      OS disk resize requires the VM to be stopped and deallocated. The VM will restart after the resize.
+  mitigations: [snapshot-os-disk, stop-vm-gracefully, deallocate-vm, stop-applications]
+  sources:
+    - title: "Expand OS Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"
+
+- id: os-disk-resize-filesystem
+  name: OS Disk Filesystem Extension
+  description: OS disk resize requires filesystem extension
+  type: rule
+  layer: guest
+  actions: [ResizeOSDisk]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Linux
+  impact:
+    risk: low
+    reason: >
+      After OS disk resize, the partition and filesystem must be extended. Most modern Linux images handle this automatically on boot.
+    affectedComponents: ["Root filesystem"]
+  mitigations: [extend-filesystem, verify-mounts]
+  sources:
+    - title: "Expand Linux OS Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/expand-disks"
+
+- id: os-disk-resize-windows
+  name: Windows OS Disk Extension
+  description: Windows OS disk resize requires partition extension
+  type: rule
+  layer: guest
+  actions: [ResizeOSDisk]
+  conditions:
+    - field: os.family
+      operator: eq
+      value: Windows
+  impact:
+    risk: low
+    reason: >
+      After OS disk resize, use Disk Management to extend the C: volume into the new unallocated space.
+    affectedComponents: ["C: drive"]
+  mitigations: [extend-partition-windows, verify-disks-attached]
+  sources:
+    - title: "Expand Windows OS Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/expand-os-disk"

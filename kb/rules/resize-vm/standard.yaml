@@ -1,0 +1,82 @@
+# VM Resize rules
+# Rules for resizing VMs between different SKUs
+
+- id: resize-same-family
+  name: Same Family Resize
+  description: Resizing within the same VM family
+  type: rule
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.family
+      operator: eq
+      value: targetSku.family
+  impact:
+    reboot: likely
+    downtime: low
+    reason: >
+      Same-family resize typically requires a reboot but stays on the same hardware cluster.
+  mitigations: [stop-applications, drain-connections, verify-applications]
+  sources:
+    - title: "Resize a VM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+
+- id: resize-cross-family
+  name: Cross Family Resize
+  description: Resizing to a different VM family
+  type: rule
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.family
+      operator: ne
+      value: targetSku.family
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Cross-family resize requires VM reallocation to different hardware. The VM will be stopped and restarted.
+  mitigations: [backup-vm, stop-vm-gracefully, stop-applications, drain-connections, verify-applications]
+  sources:
+    - title: "Resize a VM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+
+- id: resize-requires-deallocation
+  name: Resize Requires Deallocation
+  description: Target SKU not available on current cluster
+  type: rule
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: targetSku.requiresDeallocation
+      operator: eq
+      value: true
+  impact:
+    reboot: guaranteed
+    downtime: high
+    reason: >
+      Target SKU requires full deallocation. The VM will get a new hardware allocation and potentially a new IP address if not using static IP.
+  mitigations: [backup-vm, snapshot-os-disk, stop-vm-gracefully, deallocate-vm]
+  sources:
+    - title: "Resize a VM"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/resize-vm"
+
+- id: resize-processor-change
+  name: Processor Architecture Change
+  description: Resizing between different processor architectures
+  type: rule
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.processor
+      operator: ne
+      value: targetSku.processor
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Changing processor architecture requires VM reallocation to different hardware. The VM will be moved to a host with the new processor type. This is generally safe but verify application compatibility.
+  mitigations: [backup-vm, stop-vm-gracefully, stop-applications, drain-connections, verify-applications]
+  sources:
+    - title: "Azure VM Processor Types"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes"

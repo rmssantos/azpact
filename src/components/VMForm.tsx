@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight,
@@ -14,13 +14,56 @@ import {
   Shield,
   MapPin,
   Globe,
+  Power,
+  Square,
+  Camera,
+  Network,
 } from "lucide-react";
 import { VMContext, DiskConfig, ActionType, Action, DiskTopology } from "@/types";
 import { skus } from "@/data/skus";
+import { ParsedVMProfile } from "@/lib/profile-parser";
 
 interface VMFormProps {
   onSubmit: (context: VMContext, action: Action) => void;
+  profile?: ParsedVMProfile | null;
 }
+
+// Quick start examples for common scenarios
+const quickStartExamples = [
+  {
+    label: "Resize to different processor",
+    description: "Intel → AMD",
+    context: {
+      vm: { sku: "Standard_D4s_v5", generation: "Gen2" as const, zonal: true },
+      os: { family: "Linux" as const, distro: "Ubuntu", version: "22.04" },
+      disks: [{ lun: 0, name: "os-disk", role: "os" as const, sizeGB: 128, type: "Premium_LRS" as const }],
+    },
+    action: { type: "ResizeVM" as ActionType, targetSku: "Standard_D4as_v5" },
+  },
+  {
+    label: "Detach LVM disk",
+    description: "Linux LVM removal",
+    context: {
+      vm: { sku: "Standard_D4s_v5", generation: "Gen2" as const, zonal: true },
+      os: { family: "Linux" as const, distro: "Ubuntu", version: "22.04" },
+      disks: [
+        { lun: 0, name: "os-disk", role: "os" as const, sizeGB: 128, type: "Premium_LRS" as const },
+        { lun: 1, name: "data-disk", role: "data" as const, sizeGB: 256, type: "Premium_LRS" as const, topology: "lvm" as const, mount: "/mnt/data", vg: "vgdata" },
+      ],
+    },
+    action: { type: "DetachDisk" as ActionType, targetLun: 1 },
+  },
+  {
+    label: "Enable encryption",
+    description: "Windows BitLocker",
+    context: {
+      vm: { sku: "Standard_D4s_v5", generation: "Gen2" as const, zonal: true },
+      os: { family: "Windows" as const, distro: "Windows Server", version: "2022" },
+      disks: [{ lun: 0, name: "os-disk", role: "os" as const, sizeGB: 128, type: "Premium_LRS" as const }],
+    },
+    action: { type: "EnableEncryption" as ActionType, encryptionOperation: "enable" as const, encryptionTarget: "os" as const },
+  },
+];
 
 const actionGroups = [
   {
@@ -34,11 +77,32 @@ const actionGroups = [
         color: "blue",
       },
       {
+        type: "StopVM" as ActionType,
+        label: "Stop VM",
+        description: "Stop (keep allocated)",
+        icon: Power,
+        color: "orange",
+      },
+      {
+        type: "DeallocateVM" as ActionType,
+        label: "Deallocate",
+        description: "Stop & release hardware",
+        icon: Square,
+        color: "red",
+      },
+      {
         type: "RedeployVM" as ActionType,
         label: "Redeploy",
         description: "Move to new host",
         icon: RefreshCw,
         color: "purple",
+      },
+      {
+        type: "CaptureVM" as ActionType,
+        label: "Capture",
+        description: "Create image",
+        icon: Camera,
+        color: "violet",
       },
     ],
   },
@@ -72,6 +136,25 @@ const actionGroups = [
         description: "Enable/Disable ADE",
         icon: Shield,
         color: "indigo",
+      },
+    ],
+  },
+  {
+    name: "Networking",
+    actions: [
+      {
+        type: "AddNIC" as ActionType,
+        label: "Add NIC",
+        description: "Attach network interface",
+        icon: Network,
+        color: "sky",
+      },
+      {
+        type: "RemoveNIC" as ActionType,
+        label: "Remove NIC",
+        description: "Detach network interface",
+        icon: Network,
+        color: "slate",
       },
     ],
   },
@@ -118,7 +201,7 @@ const pageTransition = {
   transition: { duration: 0.3, ease: "easeOut" as const },
 };
 
-export function VMForm({ onSubmit }: VMFormProps) {
+export function VMForm({ onSubmit, profile }: VMFormProps) {
   const [step, setStep] = useState(1);
   const [actionType, setActionType] = useState<ActionType | null>(null);
 
@@ -145,6 +228,28 @@ export function VMForm({ onSubmit }: VMFormProps) {
 
   // Zone state
   const [isZonalVM, setIsZonalVM] = useState(true);
+
+  // Capture state
+  const [generalizeVM, setGeneralizeVM] = useState(true);
+
+  // NIC state
+  const [currentNicCount, setCurrentNicCount] = useState(1);
+
+  // Initialize from profile when loaded
+  useEffect(() => {
+    if (profile) {
+      // Check if SKU exists in our list, otherwise use it anyway
+      const skuExists = skus.some(s => s.name === profile.sku);
+      if (skuExists) {
+        setSourceSku(profile.sku);
+      }
+      setGeneration(profile.generation);
+      setOsFamily(profile.osFamily);
+      setDataDisksCount(profile.disks.data.length);
+      setCurrentNicCount(profile.nicCount);
+      setIsZonalVM(profile.zonal);
+    }
+  }, [profile]);
 
   const currentSourceSku = skus.find((s) => s.name === sourceSku);
   const currentTargetSku = skus.find((s) => s.name === targetSku);
@@ -227,6 +332,8 @@ export function VMForm({ onSubmit }: VMFormProps) {
         encryptionOperation,
         encryptionTarget
       }),
+      ...(actionType === "CaptureVM" && { generalize: generalizeVM }),
+      ...((actionType === "AddNIC" || actionType === "RemoveNIC") && { nicCount: currentNicCount }),
     };
 
     onSubmit(context, action);
@@ -253,6 +360,11 @@ export function VMForm({ onSubmit }: VMFormProps) {
       indigo: "from-indigo-500 to-indigo-600",
       rose: "from-rose-500 to-rose-600",
       teal: "from-teal-500 to-teal-600",
+      orange: "from-orange-500 to-orange-600",
+      red: "from-red-500 to-red-600",
+      violet: "from-violet-500 to-violet-600",
+      sky: "from-sky-500 to-sky-600",
+      slate: "from-slate-500 to-slate-600",
     };
     return colors[color] || colors.blue;
   };
@@ -268,6 +380,11 @@ export function VMForm({ onSubmit }: VMFormProps) {
       indigo: "border-indigo-500",
       rose: "border-rose-500",
       teal: "border-teal-500",
+      orange: "border-orange-500",
+      red: "border-red-500",
+      violet: "border-violet-500",
+      sky: "border-sky-500",
+      slate: "border-slate-500",
     };
     return colors[color] || colors.blue;
   };
@@ -352,6 +469,33 @@ export function VMForm({ onSubmit }: VMFormProps) {
                 </motion.div>
               ))}
             </div>
+
+            {/* Quick Start Examples */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="mt-8 pt-6 border-t border-gray-800"
+            >
+              <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Quick Start Examples
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {quickStartExamples.map((example, index) => (
+                  <motion.button
+                    key={index}
+                    onClick={() => onSubmit(example.context, example.action)}
+                    className="px-3 py-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-gray-600 transition-all text-left"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <p className="text-sm font-medium text-gray-200">{example.label}</p>
+                    <p className="text-xs text-gray-500">{example.description}</p>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
         )}
 
@@ -1015,6 +1159,299 @@ export function VMForm({ onSubmit }: VMFormProps) {
                       <li>Data transfer costs may apply</li>
                     </ul>
                   </div>
+                </div>
+              </>
+            )}
+
+            {/* Stop VM */}
+            {actionType === "StopVM" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-orange-500/20">
+                    <Power className="w-6 h-6 text-orange-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Stop VM</h2>
+                    <p className="text-sm text-gray-400">Stop the VM (hardware stays allocated)</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Current SKU</label>
+                    <select
+                      value={sourceSku}
+                      onChange={(e) => setSourceSku(e.target.value)}
+                      className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-orange-500 focus:outline-none"
+                    >
+                      {skus.map((sku) => (
+                        <option key={sku.name} value={sku.name}>
+                          [{sku.processor}] {sku.family} • {sku.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="bg-orange-900/20 border border-orange-800 rounded-xl p-4">
+                    <p className="text-sm font-medium text-orange-300 mb-2">Stop vs Deallocate</p>
+                    <p className="text-sm text-gray-300 mb-2">
+                      <strong>Stop</strong> keeps the hardware allocated - you continue to pay for compute.
+                    </p>
+                    <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+                      <li>Temp disk data is <strong>preserved</strong></li>
+                      <li>Dynamic IPs remain assigned</li>
+                      <li>Faster restart time</li>
+                      <li>You continue to pay for the VM</li>
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Deallocate VM */}
+            {actionType === "DeallocateVM" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-red-500/20">
+                    <Square className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Deallocate VM</h2>
+                    <p className="text-sm text-gray-400">Stop and release hardware resources</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Current SKU</label>
+                    <select
+                      value={sourceSku}
+                      onChange={(e) => setSourceSku(e.target.value)}
+                      className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-red-500 focus:outline-none"
+                    >
+                      {skus.map((sku) => (
+                        <option key={sku.name} value={sku.name}>
+                          [{sku.processor}] {sku.family} • {sku.name} • {sku.tempDiskGB > 0 ? `${sku.tempDiskGB}GB temp` : "No temp disk"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {currentSourceSku && currentSourceSku.tempDiskGB > 0 && (
+                    <div className="bg-red-900/30 border border-red-700 rounded-xl p-4">
+                      <p className="text-red-300 font-medium mb-2">⚠️ Temp Disk Warning</p>
+                      <p className="text-sm text-gray-300">
+                        Your SKU has a <strong>{currentSourceSku.tempDiskGB}GB temp disk</strong>.
+                        All data on the temp disk (D: on Windows, /dev/sdb on Linux) will be <strong>permanently lost</strong>.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-red-900/20 border border-red-800 rounded-xl p-4">
+                    <p className="text-sm font-medium text-red-300 mb-2">Deallocate Impacts</p>
+                    <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+                      <li>Temp disk data is <strong>lost</strong></li>
+                      <li>Dynamic public IPs will change</li>
+                      <li>No compute charges while deallocated</li>
+                      <li>May take longer to start (hardware allocation)</li>
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Capture VM */}
+            {actionType === "CaptureVM" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-violet-500/20">
+                    <Camera className="w-6 h-6 text-violet-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Capture VM</h2>
+                    <p className="text-sm text-gray-400">Create an image from this VM</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">Operating System</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { family: "Linux" as const, icon: "🐧", desc: "waagent -deprovision" },
+                        { family: "Windows" as const, icon: "🪟", desc: "sysprep" },
+                      ].map(({ family, icon, desc }) => (
+                        <motion.button
+                          key={family}
+                          onClick={() => setOsFamily(family)}
+                          className={`p-4 rounded-xl border-2 text-left transition-all ${
+                            osFamily === family
+                              ? "border-violet-500 bg-violet-500/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          }`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <span className="text-2xl">{icon}</span>
+                          <p className="font-semibold mt-2">{family}</p>
+                          <p className="text-xs text-gray-400">{desc}</p>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">Capture Type</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <motion.button
+                        onClick={() => setGeneralizeVM(true)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          generalizeVM ? "border-violet-500 bg-violet-500/10" : "border-gray-700 hover:border-gray-600"
+                        }`}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <p className="font-semibold">Generalized</p>
+                        <p className="text-xs text-gray-400">For creating new VMs</p>
+                      </motion.button>
+                      <motion.button
+                        onClick={() => setGeneralizeVM(false)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          !generalizeVM ? "border-violet-500 bg-violet-500/10" : "border-gray-700 hover:border-gray-600"
+                        }`}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <p className="font-semibold">Specialized</p>
+                        <p className="text-xs text-gray-400">Clone this exact VM</p>
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {generalizeVM && (
+                    <div className="bg-red-900/30 border border-red-700 rounded-xl p-4">
+                      <p className="text-red-300 font-medium mb-2">⚠️ Critical Warning</p>
+                      <p className="text-sm text-gray-300 mb-2">
+                        Generalization requires running <strong>{osFamily === "Windows" ? "sysprep" : "waagent -deprovision+user"}</strong>.
+                        This will:
+                      </p>
+                      <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+                        <li>Remove machine-specific information</li>
+                        <li>Reset the administrator/root account</li>
+                        <li><strong>Make the source VM unusable!</strong></li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {!generalizeVM && (
+                    <div className="bg-violet-900/20 border border-violet-800 rounded-xl p-4">
+                      <p className="text-sm text-gray-300">
+                        Specialized images keep the VM identity. The source VM remains usable after capture.
+                        New VMs from this image will have the same hostname, users, and configuration.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Add NIC */}
+            {actionType === "AddNIC" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-sky-500/20">
+                    <Network className="w-6 h-6 text-sky-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Add Network Interface</h2>
+                    <p className="text-sm text-gray-400">Attach a new NIC to the VM</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Current SKU</label>
+                    <select
+                      value={sourceSku}
+                      onChange={(e) => setSourceSku(e.target.value)}
+                      className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:outline-none"
+                    >
+                      {skus.map((sku) => (
+                        <option key={sku.name} value={sku.name}>
+                          [{sku.processor}] {sku.family} • {sku.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Current NIC Count</label>
+                    <select
+                      value={currentNicCount}
+                      onChange={(e) => setCurrentNicCount(parseInt(e.target.value))}
+                      className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-sky-500 focus:outline-none"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                        <option key={n} value={n}>{n} NIC{n !== 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="bg-sky-900/20 border border-sky-800 rounded-xl p-4">
+                    <p className="text-sm font-medium text-sky-300 mb-2">Requirements</p>
+                    <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+                      <li>VM must be <strong>stopped (deallocated)</strong> to add a NIC</li>
+                      <li>Check SKU supports the number of NICs needed</li>
+                      <li>New NIC must be in a compatible subnet</li>
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Remove NIC */}
+            {actionType === "RemoveNIC" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-slate-500/20">
+                    <Network className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Remove Network Interface</h2>
+                    <p className="text-sm text-gray-400">Detach a NIC from the VM</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Current NIC Count</label>
+                    <select
+                      value={currentNicCount}
+                      onChange={(e) => setCurrentNicCount(parseInt(e.target.value))}
+                      className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-slate-500 focus:outline-none"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                        <option key={n} value={n}>{n} NIC{n !== 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {currentNicCount === 1 && (
+                    <div className="bg-red-900/30 border border-red-700 rounded-xl p-4">
+                      <p className="text-red-300 font-medium">⚠️ Cannot remove the primary NIC</p>
+                      <p className="text-sm text-gray-300 mt-1">
+                        A VM must have at least one network interface attached.
+                      </p>
+                    </div>
+                  )}
+
+                  {currentNicCount > 1 && (
+                    <div className="bg-slate-900/20 border border-slate-700 rounded-xl p-4">
+                      <p className="text-sm font-medium text-slate-300 mb-2">Requirements</p>
+                      <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+                        <li>VM must be <strong>stopped (deallocated)</strong> to remove a NIC</li>
+                        <li>Cannot remove the primary NIC</li>
+                        <li>Applications using this NIC will lose connectivity</li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </>
             )}

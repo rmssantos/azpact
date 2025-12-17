@@ -1,0 +1,146 @@
+# Blocker rules for VM Resize operations
+# These prevent operations that would fail or cause data loss
+
+- id: blocker-gen2-to-gen1
+  name: Generation Downgrade Blocked
+  description: Cannot resize from Gen2 to Gen1-only SKU
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.generation
+      operator: eq
+      value: "Gen2"
+    - field: vm.generation
+      operator: nin
+      value: targetSku.generation
+  impact:
+    reason: >
+      Target SKU only supports Gen1 VMs. Your current VM is Gen2 and cannot be downgraded to Gen1.
+  mitigations: []
+  sources:
+    - title: "Azure VM Sizes - Generation Support"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/generation-2"
+
+- id: blocker-exceed-max-disks
+  name: Max Data Disks Exceeded
+  description: Target SKU has fewer max data disks than currently attached
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: disks.count
+      operator: gt
+      value: targetSku.maxDataDisks
+  impact:
+    reason: >
+      Target SKU supports fewer data disks than currently attached. Detach disks first.
+  mitigations: []
+  sources:
+    - title: "VM Sizes and Data Disk Limits"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/sizes"
+
+- id: blocker-ultra-ssd-not-supported
+  name: Ultra SSD Not Supported
+  description: Target SKU does not support Ultra SSD
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: disks.hasUltraSSD
+      operator: eq
+      value: true
+    - field: targetSku.premiumIO
+      operator: eq
+      value: false
+  impact:
+    reason: >
+      Target SKU does not support Ultra SSD. Detach Ultra SSD disks or choose a different SKU.
+  mitigations: []
+  sources:
+    - title: "Ultra Disks - Supported VM Series"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types#ultra-disks"
+
+- id: blocker-temp-disk-to-no-temp-disk
+  name: Temp Disk Configuration Mismatch
+  description: Cannot resize from VM with temp disk to VM without temp disk
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: true
+    - field: targetSku.tempDiskGB
+      operator: eq
+      value: 0
+  impact:
+    reason: >
+      Cannot resize from a VM with local temp disk to a VM without temp disk. Azure blocks this to prevent pagefile/swap issues. Workaround: Create a snapshot, then create a new VM from that snapshot with the target size.
+  mitigations: []
+  sources:
+    - title: "Azure VMs with No Temp Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+
+- id: blocker-no-temp-disk-to-temp-disk
+  name: Temp Disk Configuration Mismatch
+  description: Cannot resize from VM without temp disk to VM with temp disk
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: false
+    - field: targetSku.tempDiskGB
+      operator: gt
+      value: 0
+  impact:
+    reason: >
+      Cannot resize from a VM without local temp disk to a VM with temp disk. Azure blocks this due to storage configuration differences. Workaround: Create a snapshot, then create a new VM from that snapshot with the target size.
+  mitigations: []
+  sources:
+    - title: "Azure VMs with No Temp Disk"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+
+- id: blocker-x86-to-arm
+  name: x86 to ARM Architecture Blocked
+  description: Cannot resize from x86/x64 to ARM architecture
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.processor
+      operator: ne
+      value: ARM
+    - field: targetSku.processor
+      operator: eq
+      value: ARM
+  impact:
+    reason: >
+      Cannot resize from x86/x64 to ARM architecture. ARM VMs require ARM-compatible OS images - the existing OS disk will not boot on ARM hardware. Workaround: Deploy a new ARM-based VM with an ARM-compatible image and migrate your data.
+  mitigations: []
+  sources:
+    - title: "ARM-based Azure VMs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/dpsv5-dpdsv5-series"
+
+- id: blocker-arm-to-x86
+  name: ARM to x86 Architecture Blocked
+  description: Cannot resize from ARM to x86/x64 architecture
+  type: blocker
+  layer: infra
+  actions: [ResizeVM]
+  conditions:
+    - field: vm.processor
+      operator: eq
+      value: ARM
+    - field: targetSku.processor
+      operator: ne
+      value: ARM
+  impact:
+    reason: >
+      Cannot resize from ARM to x86/x64 architecture. x86 VMs require x86-compatible OS images - the existing ARM OS disk will not boot on x86 hardware. Workaround: Deploy a new x86-based VM with an x86-compatible image and migrate your data.
+  mitigations: []
+  sources:
+    - title: "ARM-based Azure VMs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/dpsv5-dpdsv5-series"

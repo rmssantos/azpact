@@ -1,0 +1,22 @@
+# LVM Disk Detach rules
+# Rules for detaching disks that are LVM physical volumes
+
+- id: lvm-pv-detach-critical
+  name: LVM Physical Volume Detach
+  description: Detaching a disk that is an LVM physical volume
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.topology
+      operator: eq
+      value: lvm
+  impact:
+    risk: critical
+    reason: >
+      This disk is part of an LVM volume group. Detaching it will cause data loss and potentially make the VG unusable.
+    affectedComponents: ["Volume Group", "Logical Volumes", "Mounted Filesystems"]
+  mitigations: [stop-applications, unmount-filesystem, deactivate-vg, remove-pv-from-vg]
+  sources:
+    - title: "LVM Administration Guide"
+      url: "https://man7.org/linux/man-pages/man8/lvm.8.html"

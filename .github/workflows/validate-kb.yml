@@ -1,0 +1,44 @@
+name: Validate Knowledge Base
+
+on:
+  pull_request:
+    paths:
+      - 'kb/**'
+      - 'schemas/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'kb/**'
+      - 'schemas/**'
+
+jobs:
+  validate:
+    name: Validate Rules & Mitigations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Knowledge Base
+        run: npm run build-kb
+
+      - name: Validate Knowledge Base
+        run: npm run validate-kb
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## Knowledge Base Validation Passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All rules and mitigations are valid." >> $GITHUB_STEP_SUMMARY

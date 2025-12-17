@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Azure Change Impact Radar",
   description: "Understand the real impact of Azure VM changes before execution",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

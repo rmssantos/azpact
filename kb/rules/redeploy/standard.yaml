@@ -1,0 +1,53 @@
+# Redeploy VM Rules
+# These rules evaluate the impact of redeploying a VM to a new Azure host
+
+- id: redeploy-standard
+  name: Standard Redeploy
+  description: Standard redeploy operation moves VM to new Azure host
+  type: rule
+  layer: infra
+  actions: [RedeployVM]
+  conditions: []
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    reason: >
+      Redeploy moves the VM to a new Azure host. Expect 5-15 minutes of downtime
+      while the VM is stopped, moved to new hardware, and restarted.
+  mitigations:
+    - stop-applications
+    - drain-connections
+    - notify-users
+    - verify-applications
+  confidence: high
+  sources:
+    - title: "Redeploy Virtual Machine - Azure Docs"
+      url: "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/redeploy-to-new-node-windows"
+  tags: [redeploy, infra, downtime]
+
+- id: redeploy-temp-disk-loss
+  name: Temp Disk Data Loss on Redeploy
+  description: Redeploy will wipe all temporary disk data
+  type: rule
+  layer: infra
+  actions: [RedeployVM]
+  conditions:
+    - field: vm.hasTempDisk
+      operator: eq
+      value: true
+  impact:
+    reboot: guaranteed
+    downtime: medium
+    dataLossRisk: true
+    reason: >
+      Redeploy moves the VM to new hardware. The temporary disk is local to
+      the host and will be completely wiped. All data on D: (Windows) or
+      /dev/sdb (Linux) will be permanently lost.
+  mitigations:
+    - backup-temp-disk-data
+    - backup-vm
+  confidence: high
+  sources:
+    - title: "Temporary Disk - Azure Docs"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk"
+  tags: [redeploy, temp-disk, data-loss]

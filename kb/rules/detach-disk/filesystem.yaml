@@ -1,0 +1,48 @@
+# Filesystem-aware Disk Detach rules
+# Rules for detaching disks with mounted filesystems
+
+- id: mounted-disk-detach-linux
+  name: Mounted Disk Detach (Linux)
+  description: Detaching a disk with mounted filesystem on Linux
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.mount
+      operator: exists
+      value: true
+    - field: os.family
+      operator: eq
+      value: Linux
+  impact:
+    risk: high
+    reason: >
+      Disk has an active mount point. Detaching without unmounting will cause filesystem corruption and potential data loss.
+    affectedComponents: ["Filesystem", "Applications using mount point"]
+  mitigations: [stop-applications, unmount-filesystem, remove-fstab-entry]
+  sources:
+    - title: "Detach Data Disk - Linux"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/detach-disk"
+
+- id: mounted-disk-detach-windows
+  name: Mounted Disk Detach (Windows)
+  description: Detaching a disk with active volume on Windows
+  type: rule
+  layer: guest
+  actions: [DetachDisk]
+  conditions:
+    - field: disk.mount
+      operator: exists
+      value: true
+    - field: os.family
+      operator: eq
+      value: Windows
+  impact:
+    risk: high
+    reason: >
+      Disk has an active volume. Detaching without setting it offline will cause data loss and potential corruption.
+    affectedComponents: ["Volume", "Applications using drive letter"]
+  mitigations: [stop-applications, offline-disk-windows]
+  sources:
+    - title: "Detach Data Disk - Windows"
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/detach-disk"
