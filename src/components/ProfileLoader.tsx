@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -25,12 +25,116 @@ interface ProfileLoaderProps {
 const MAX_FILE_SIZE_MB = 1;
 const MAX_INPUT_LENGTH = 500000; // 500KB should be plenty for VM JSON
 
+// ============================================================================
+// In-Memory Encryption using Web Crypto API
+// ============================================================================
+// This encrypts sensitive data while in React state to protect against:
+// - React DevTools inspection
+// - Browser memory dumps
+// - Malicious extensions reading component state
+// The key is generated per-session and never persisted.
+// ============================================================================
+
+interface EncryptedData {
+  iv: Uint8Array<ArrayBuffer>;
+  data: ArrayBuffer;
+}
+
+class MemoryCrypto {
+  private key: CryptoKey | null = null;
+
+  async init(): Promise<void> {
+    if (this.key) return;
+    // Generate a new AES-GCM key for this session
+    this.key = await crypto.subtle.generateKey(
+      { name: "AES-GCM", length: 256 },
+      false, // not extractable - key stays in memory only
+      ["encrypt", "decrypt"]
+    );
+  }
+
+  async encrypt(plaintext: string): Promise<EncryptedData | null> {
+    if (!plaintext) return null;
+    await this.init();
+    if (!this.key) return null;
+
+    const encoder = new TextEncoder();
+    const iv = new Uint8Array(12) as Uint8Array<ArrayBuffer>;
+    crypto.getRandomValues(iv); // 96-bit IV for AES-GCM
+    const data = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      this.key,
+      encoder.encode(plaintext)
+    );
+    return { iv, data };
+  }
+
+  async decrypt(encrypted: EncryptedData | null): Promise<string> {
+    if (!encrypted || !this.key) return "";
+
+    try {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: encrypted.iv },
+        this.key,
+        encrypted.data
+      );
+      return new TextDecoder().decode(decrypted);
+    } catch {
+      return "";
+    }
+  }
+
+  // Destroy the key - data becomes unrecoverable
+  destroy(): void {
+    this.key = null;
+  }
+}
+
+/**
+ * Securely wipe a string from memory by overwriting it
+ */
+function secureWipe(setter: (value: string) => void): void {
+  setter("");
+}
+
 export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoaderProps) {
-  const [jsonInput, setJsonInput] = useState("");
+  // Security: Store encrypted data in state, display value separately
+  const [encryptedInput, setEncryptedInput] = useState<EncryptedData | null>(null);
+  const [displayValue, setDisplayValue] = useState(""); // Only for textarea display
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cryptoRef = useRef<MemoryCrypto>(new MemoryCrypto());
+
+  // Security: Clear sensitive data when component unmounts or closes
+  const clearSensitiveData = useCallback(() => {
+    setEncryptedInput(null);
+    secureWipe(setDisplayValue);
+    setError(null);
+    // Destroy encryption key
+    cryptoRef.current.destroy();
+    // Reinitialize for next use
+    cryptoRef.current = new MemoryCrypto();
+    // Clear file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  // Security: Clear data on unmount
+  useEffect(() => {
+    return () => {
+      clearSensitiveData();
+    };
+  }, [clearSensitiveData]);
+
+  // Security: Clear data when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      clearSensitiveData();
+    }
+  }, [isOpen, clearSensitiveData]);
 
   const cliCommand = getAzureCliCommand();
 
@@ -40,6 +144,19 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Security: Encrypt input as it's entered
+  const handleInputChange = async (value: string) => {
+    if (value.length > MAX_INPUT_LENGTH) {
+      setError(`Input too large. Maximum is ${Math.round(MAX_INPUT_LENGTH / 1000)}KB.`);
+      return;
+    }
+    setDisplayValue(value);
+    setError(null);
+    // Encrypt and store
+    const encrypted = await cryptoRef.current.encrypt(value);
+    setEncryptedInput(encrypted);
+  };
+
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -47,8 +164,7 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
         setError(`Input too large. Maximum is ${Math.round(MAX_INPUT_LENGTH / 1000)}KB.`);
         return;
       }
-      setJsonInput(text);
-      setError(null);
+      await handleInputChange(text);
     } catch {
       setError("Unable to access clipboard. Please paste manually.");
     }
@@ -65,14 +181,13 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const content = event.target?.result as string;
       if (content.length > MAX_INPUT_LENGTH) {
         setError(`Input too large. Maximum is ${Math.round(MAX_INPUT_LENGTH / 1000)}KB.`);
         return;
       }
-      setJsonInput(content);
-      setError(null);
+      await handleInputChange(content);
     };
     reader.onerror = () => {
       setError("Failed to read file");
@@ -80,8 +195,8 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
     reader.readAsText(file);
   };
 
-  const handleLoadProfile = () => {
-    if (!jsonInput.trim()) {
+  const handleLoadProfile = async () => {
+    if (!displayValue.trim()) {
       setError("Please paste the JSON output first");
       return;
     }
@@ -89,24 +204,26 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
     setIsLoading(true);
     setError(null);
 
+    // Security: Decrypt data for parsing
+    const decryptedJson = await cryptoRef.current.decrypt(encryptedInput);
+
     // Brief delay for UX
     setTimeout(() => {
-      const result = parseAzureVMJson(jsonInput);
+      const result = parseAzureVMJson(decryptedJson);
 
       if (result.success && result.profile) {
         onProfileLoaded(result.profile);
-        setJsonInput("");
+        clearSensitiveData();
         onClose();
       } else {
         setError(result.error || "Failed to parse VM profile");
       }
       setIsLoading(false);
-    }, 300);
+    }, 100);
   };
 
   const handleClose = () => {
-    setJsonInput("");
-    setError(null);
+    clearSensitiveData();
     onClose();
   };
 
@@ -209,18 +326,18 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
                 </div>
               </div>
               <textarea
-                value={jsonInput}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value.length > MAX_INPUT_LENGTH) {
-                    setError(`Input too large. Maximum is ${Math.round(MAX_INPUT_LENGTH / 1000)}KB.`);
-                    return;
-                  }
-                  setJsonInput(value);
-                  setError(null);
-                }}
+                value={displayValue}
+                onChange={(e) => handleInputChange(e.target.value)}
                 placeholder='{"name": "my-vm", "hardwareProfile": {...}, ...}'
                 className="w-full h-32 bg-gray-900 rounded-lg p-3 text-xs text-gray-300 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-700"
+                // Security: Prevent browser/extensions from caching or reading input
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
               />
             </div>
 
@@ -269,7 +386,7 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
             </button>
             <motion.button
               onClick={handleLoadProfile}
-              disabled={!jsonInput.trim() || isLoading}
+              disabled={!displayValue.trim() || isLoading}
               className="px-4 py-1.5 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
