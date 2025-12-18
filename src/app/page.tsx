@@ -15,14 +15,10 @@ function HomeContent() {
   const [report, setReport] = useState<ImpactReportType | null>(null);
   const [currentAction, setCurrentAction] = useState<Action | null>(null);
   const [currentContext, setCurrentContext] = useState<VMContext | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [profile, setProfile] = useState<ParsedVMProfile | null>(null);
   const [showProfileLoader, setShowProfileLoader] = useState(false);
-  const [analyzingTooLong, setAnalyzingTooLong] = useState(false);
-  const [analysisId, setAnalysisId] = useState(0); // Counter to track analysis requests
   const reportRef = useRef<HTMLDivElement>(null);
-  const analyzingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Generate shareable URL from current context and action
   const generateShareUrl = () => {
@@ -65,130 +61,32 @@ function HomeContent() {
   };
 
   const handleSubmit = (context: VMContext, action: Action) => {
-    // Set state and increment analysis ID to trigger the effect
     setCurrentAction(action);
     setCurrentContext(context);
-    setIsAnalyzing(true);
-    setAnalysisId((prev) => prev + 1);
-  };
 
-  // Effect to run the actual analysis when isAnalyzing becomes true
-  useEffect(() => {
-    if (!isAnalyzing || !currentContext || !currentAction) return;
-
-    const currentAnalysisId = analysisId;
-    let cancelled = false;
-    let failsafeId: NodeJS.Timeout | null = null;
-
-    // Use requestAnimationFrame + setTimeout for more reliable execution
-    const runAnalysis = () => {
-      if (cancelled) return;
-
-      try {
-        console.log("[AZpact] Running analysis...", currentAnalysisId);
-        const result = evaluateImpact(currentContext, currentAction);
-        console.log("[AZpact] Analysis complete", currentAnalysisId);
-
-        if (!cancelled) {
-          // Clear the failsafe since we completed successfully
-          if (failsafeId) {
-            clearTimeout(failsafeId);
-            failsafeId = null;
-            console.log("[AZpact] Cleared failsafe timeout");
-          }
-          console.log("[AZpact] Setting report and isAnalyzing=false");
-          setReport(result);
-          setIsAnalyzing(false);
-          console.log("[AZpact] State updates queued");
-        } else {
-          console.log("[AZpact] Skipped - cancelled=true");
-        }
-      } catch (error) {
-        console.error("[AZpact] Error evaluating impact:", error);
-        if (!cancelled) {
-          // Clear the failsafe since we're handling the error
-          if (failsafeId) {
-            clearTimeout(failsafeId);
-            failsafeId = null;
-          }
-          setReport({
-            blocked: false,
-            infra: {
-              reboot: "none",
-              downtime: "none",
-              reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-            guest: {
-              risk: "low",
-              reason: "Unable to evaluate guest impact due to error.",
-              affectedComponents: [],
-            },
-            mitigations: [],
-            explanation: "An error occurred during evaluation.",
-            matchedRules: [],
-          });
-          setIsAnalyzing(false);
-        }
-      }
-    };
-
-    // Brief delay for UX feedback, using requestAnimationFrame for reliability
-    const timeoutId = setTimeout(() => {
-      requestAnimationFrame(runAnalysis);
-    }, 300);
-
-    // Auto-recovery failsafe after 10 seconds
-    failsafeId = setTimeout(() => {
-      console.log("[AZpact] Failsafe timer fired, cancelled=", cancelled);
-      if (!cancelled) {
-        console.warn("[AZpact] Failsafe triggered: auto-recovering from stuck state");
-        setIsAnalyzing(false);
-        setReport({
-          blocked: false,
-          infra: {
-            reboot: "none",
-            downtime: "none",
-            reason: "Analysis timed out. Please try again.",
-          },
-          guest: {
-            risk: "low",
-            reason: "Unable to complete analysis.",
-            affectedComponents: [],
-          },
-          mitigations: [],
-          explanation: "The analysis took too long and was automatically cancelled.",
-          matchedRules: [],
-        });
-      }
-    }, 10000);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-      if (failsafeId) clearTimeout(failsafeId);
-    };
-  }, [analysisId]); // Only re-run when analysisId changes
-
-  // Failsafe timeout for analyzing state
-  useEffect(() => {
-    if (isAnalyzing) {
-      setAnalyzingTooLong(false);
-      analyzingTimeoutRef.current = setTimeout(() => {
-        setAnalyzingTooLong(true);
-      }, 5000); // Show retry option after 5 seconds
-    } else {
-      setAnalyzingTooLong(false);
-      if (analyzingTimeoutRef.current) {
-        clearTimeout(analyzingTimeoutRef.current);
-        analyzingTimeoutRef.current = null;
-      }
+    try {
+      const result = evaluateImpact(context, action);
+      setReport(result);
+    } catch (error) {
+      console.error("Error evaluating impact:", error);
+      setReport({
+        blocked: false,
+        infra: {
+          reboot: "none",
+          downtime: "none",
+          reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
+        },
+        guest: {
+          risk: "low",
+          reason: "Unable to evaluate guest impact due to error.",
+          affectedComponents: [],
+        },
+        mitigations: [],
+        explanation: "An error occurred during evaluation.",
+        matchedRules: [],
+      });
     }
-    return () => {
-      if (analyzingTimeoutRef.current) {
-        clearTimeout(analyzingTimeoutRef.current);
-      }
-    };
-  }, [isAnalyzing]);
+  };
 
   // Parse URL params and auto-evaluate on mount
   useEffect(() => {
@@ -256,20 +154,6 @@ function HomeContent() {
     setReport(null);
     setCurrentAction(null);
     setCurrentContext(null);
-  };
-
-  const handleRetryAnalyzing = () => {
-    // Reset states and trigger a new analysis
-    setAnalyzingTooLong(false);
-    if (currentContext && currentAction) {
-      // Increment analysisId to trigger a fresh analysis
-      setAnalysisId((prev) => prev + 1);
-    }
-  };
-
-  const handleCancelAnalyzing = () => {
-    setIsAnalyzing(false);
-    setAnalyzingTooLong(false);
   };
 
   // Get SKU info for display
@@ -354,49 +238,7 @@ function HomeContent() {
 
         {/* Main Content */}
         <AnimatePresence mode="wait">
-          {isAnalyzing ? (
-            <motion.div
-              key="analyzing"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="glass rounded-2xl p-12 text-center"
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                className="inline-block mb-4"
-              >
-                <Radar className="w-12 h-12 text-blue-400" />
-              </motion.div>
-              <p className="text-lg font-medium text-gray-300">Analyzing impact...</p>
-              <p className="text-sm text-gray-500 mt-2">Evaluating rules and conditions</p>
-
-              {analyzingTooLong && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-6 pt-4 border-t border-gray-700"
-                >
-                  <p className="text-sm text-amber-400 mb-3">Taking too long?</p>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      onClick={handleRetryAnalyzing}
-                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
-                    >
-                      Try Again
-                    </button>
-                    <button
-                      onClick={handleCancelAnalyzing}
-                      className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </motion.div>
-          ) : !report ? (
+          {!report ? (
             <motion.div
               key="form"
               initial={{ opacity: 0, y: 20 }}
