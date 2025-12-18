@@ -20,6 +20,7 @@ function HomeContent() {
   const [profile, setProfile] = useState<ParsedVMProfile | null>(null);
   const [showProfileLoader, setShowProfileLoader] = useState(false);
   const [analyzingTooLong, setAnalyzingTooLong] = useState(false);
+  const [analysisId, setAnalysisId] = useState(0); // Counter to track analysis requests
   const reportRef = useRef<HTMLDivElement>(null);
   const analyzingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -64,62 +65,92 @@ function HomeContent() {
   };
 
   const handleSubmit = (context: VMContext, action: Action) => {
-    setIsAnalyzing(true);
+    // Set state and increment analysis ID to trigger the effect
     setCurrentAction(action);
     setCurrentContext(context);
+    setIsAnalyzing(true);
+    setAnalysisId((prev) => prev + 1);
+  };
 
-    // Auto-recovery failsafe - if nothing happens after 10s, force complete
-    const failsafeTimeout = setTimeout(() => {
-      console.warn("Failsafe triggered: auto-recovering from stuck analyzing state");
-      setIsAnalyzing(false);
-      setReport({
-        blocked: false,
-        infra: {
-          reboot: "none",
-          downtime: "none",
-          reason: "Analysis timed out. Please try again.",
-        },
-        guest: {
-          risk: "low",
-          reason: "Unable to complete analysis.",
-          affectedComponents: [],
-        },
-        mitigations: [],
-        explanation: "The analysis took too long and was automatically cancelled.",
-        matchedRules: [],
-      });
-    }, 10000);
+  // Effect to run the actual analysis when isAnalyzing becomes true
+  useEffect(() => {
+    if (!isAnalyzing || !currentContext || !currentAction) return;
 
-    // Brief delay for UX feedback
-    setTimeout(() => {
-      clearTimeout(failsafeTimeout);
+    const currentAnalysisId = analysisId;
+    let cancelled = false;
+
+    // Use requestAnimationFrame + setTimeout for more reliable execution
+    const runAnalysis = () => {
+      if (cancelled) return;
+
       try {
-        const result = evaluateImpact(context, action);
-        setReport(result);
+        console.log("[AZpact] Running analysis...", currentAnalysisId);
+        const result = evaluateImpact(currentContext, currentAction);
+        console.log("[AZpact] Analysis complete", currentAnalysisId);
+
+        if (!cancelled) {
+          setReport(result);
+          setIsAnalyzing(false);
+        }
       } catch (error) {
-        console.error("Error evaluating impact:", error);
-        // Set a fallback report on error
+        console.error("[AZpact] Error evaluating impact:", error);
+        if (!cancelled) {
+          setReport({
+            blocked: false,
+            infra: {
+              reboot: "none",
+              downtime: "none",
+              reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+            guest: {
+              risk: "low",
+              reason: "Unable to evaluate guest impact due to error.",
+              affectedComponents: [],
+            },
+            mitigations: [],
+            explanation: "An error occurred during evaluation.",
+            matchedRules: [],
+          });
+          setIsAnalyzing(false);
+        }
+      }
+    };
+
+    // Brief delay for UX feedback, using requestAnimationFrame for reliability
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(runAnalysis);
+    }, 300);
+
+    // Auto-recovery failsafe after 10 seconds
+    const failsafeId = setTimeout(() => {
+      if (!cancelled && isAnalyzing) {
+        console.warn("[AZpact] Failsafe triggered: auto-recovering from stuck state");
+        setIsAnalyzing(false);
         setReport({
           blocked: false,
           infra: {
             reboot: "none",
             downtime: "none",
-            reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
+            reason: "Analysis timed out. Please try again.",
           },
           guest: {
             risk: "low",
-            reason: "Unable to evaluate guest impact due to error.",
+            reason: "Unable to complete analysis.",
             affectedComponents: [],
           },
           mitigations: [],
-          explanation: "An error occurred during evaluation.",
+          explanation: "The analysis took too long and was automatically cancelled.",
           matchedRules: [],
         });
-      } finally {
-        setIsAnalyzing(false);
       }
-    }, 300);
-  };
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      clearTimeout(failsafeId);
+    };
+  }, [analysisId]); // Only re-run when analysisId changes
 
   // Failsafe timeout for analyzing state
   useEffect(() => {
@@ -211,11 +242,11 @@ function HomeContent() {
   };
 
   const handleRetryAnalyzing = () => {
-    setIsAnalyzing(false);
+    // Reset states and trigger a new analysis
     setAnalyzingTooLong(false);
-    // If we have context and action, retry the analysis
     if (currentContext && currentAction) {
-      setTimeout(() => handleSubmit(currentContext, currentAction), 100);
+      // Increment analysisId to trigger a fresh analysis
+      setAnalysisId((prev) => prev + 1);
     }
   };
 
