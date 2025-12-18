@@ -43,14 +43,10 @@ export default function RootLayout({
         <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
-        {/* Security: Prevent clickjacking */}
-        <meta httpEquiv="X-Frame-Options" content="DENY" />
-        {/* Security: Prevent MIME sniffing */}
-        <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
-        {/* Security: XSS Protection (legacy browsers) */}
-        <meta httpEquiv="X-XSS-Protection" content="1; mode=block" />
         {/* Security: Referrer Policy - don't leak URLs */}
         <meta name="referrer" content="no-referrer" />
+        {/* Note: X-Frame-Options, X-Content-Type-Options, and CSP must be set via HTTP headers, not meta tags */}
+        {/* These should be configured in staticwebapp.config.json for Azure Static Web Apps */}
       </head>
       <body className="antialiased text-white">
         {children}

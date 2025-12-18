@@ -68,9 +68,31 @@ function HomeContent() {
 
     // Brief delay for UX feedback
     setTimeout(() => {
-      const result = evaluateImpact(context, action);
-      setReport(result);
-      setIsAnalyzing(false);
+      try {
+        const result = evaluateImpact(context, action);
+        setReport(result);
+      } catch (error) {
+        console.error("Error evaluating impact:", error);
+        // Set a fallback report on error
+        setReport({
+          blocked: false,
+          infra: {
+            reboot: "none",
+            downtime: "none",
+            reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
+          },
+          guest: {
+            risk: "low",
+            reason: "Unable to evaluate guest impact due to error.",
+            affectedComponents: [],
+          },
+          mitigations: [],
+          explanation: "An error occurred during evaluation.",
+          matchedRules: [],
+        });
+      } finally {
+        setIsAnalyzing(false);
+      }
     }, 300);
   };
 
