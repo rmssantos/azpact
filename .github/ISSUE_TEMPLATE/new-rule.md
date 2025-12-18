@@ -2,7 +2,7 @@
 name: New Rule Request
 about: Suggest a new rule for an Azure scenario
 title: '[Rule] '
-labels: 'enhancement, rule-request'
+labels: enhancement
 assignees: ''
 ---
 
