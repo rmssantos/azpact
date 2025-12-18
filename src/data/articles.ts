@@ -439,6 +439,70 @@ export const articles: Record<ActionType | "general", Article[]> = {
     },
   ],
 
+  // Restore VM articles
+  RestoreVM: [
+    {
+      id: "restore-vm-portal",
+      title: "Restore VMs using Azure Portal",
+      description: "How to restore Azure VMs from backup recovery points.",
+      url: "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms",
+      category: "action",
+    },
+    {
+      id: "restore-options",
+      title: "Restore Options Overview",
+      description: "Understand different restore options: new VM, replace existing, disks only.",
+      url: "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#restore-options",
+      category: "action",
+    },
+    {
+      id: "restore-disks",
+      title: "Restore Disks from Backup",
+      description: "How to restore only disks from a recovery point.",
+      url: "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#restore-disks",
+      category: "action",
+    },
+    {
+      id: "cross-region-restore",
+      title: "Cross-Region Restore",
+      description: "Restore Azure VMs in a secondary region for disaster recovery.",
+      url: "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#cross-region-restore",
+      category: "action",
+    },
+  ],
+
+  // Swap OS Disk articles
+  SwapOSDisk: [
+    {
+      id: "swap-os-disk-windows",
+      title: "Swap OS Disk (Windows)",
+      description: "Change the OS disk for a Windows Azure VM using PowerShell.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/os-disk-swap",
+      category: "action",
+    },
+    {
+      id: "swap-os-disk-linux",
+      title: "Swap OS Disk (Linux)",
+      description: "Change the OS disk for a Linux Azure VM using Azure CLI.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/os-disk-swap",
+      category: "action",
+    },
+    {
+      id: "attach-os-disk",
+      title: "Attach Existing OS Disk",
+      description: "Create a new VM by attaching an existing OS disk.",
+      url: "https://learn.microsoft.com/en-us/azure/virtual-machines/attach-os-disk",
+      category: "action",
+    },
+    {
+      id: "troubleshoot-recovery-disk",
+      title: "Troubleshoot with Recovery Disk",
+      description: "Troubleshoot a VM by attaching its OS disk to another VM.",
+      url: "https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-machines/windows/troubleshoot-recovery-disks-portal-windows",
+      category: "troubleshoot",
+    },
+  ],
+
   // General articles (backups, snapshots, etc.)
   general: [
     {

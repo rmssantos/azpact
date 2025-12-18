@@ -220,6 +220,288 @@
     ]
   },
   {
+    "id": "restore-vm-new",
+    "name": "Restore to New VM",
+    "description": "Creating a new VM from backup or snapshot",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RestoreVM"
+    ],
+    "conditions": [
+      {
+        "field": "action.restoreType",
+        "operator": "eq",
+        "value": "newVM"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Creating a new VM from backup does not affect the original VM. The new VM will be created with a new name and can run alongside the original. No downtime to existing workloads.\n"
+    },
+    "mitigations": [
+      "verify-restore-point",
+      "verify-network-config"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Restore a VM",
+        "url": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms"
+      }
+    ]
+  },
+  {
+    "id": "restore-vm-replace",
+    "name": "Restore and Replace Existing VM",
+    "description": "Replacing existing VM with restored version",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RestoreVM"
+    ],
+    "conditions": [
+      {
+        "field": "action.restoreType",
+        "operator": "eq",
+        "value": "replaceExisting"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "high",
+      "reason": "Replacing an existing VM requires stopping and deleting the current VM, then creating a new one from the restore point. Extended downtime is expected. All data written after the restore point will be LOST.\n"
+    },
+    "mitigations": [
+      "backup-vm",
+      "stop-applications",
+      "drain-connections",
+      "notify-users",
+      "verify-restore-point"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Restore and replace existing VM",
+        "url": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#replace-existing-vms"
+      }
+    ]
+  },
+  {
+    "id": "restore-vm-disks-only",
+    "name": "Restore Disks Only",
+    "description": "Restoring only the disks without creating a VM",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "RestoreVM"
+    ],
+    "conditions": [
+      {
+        "field": "action.restoreType",
+        "operator": "eq",
+        "value": "disksOnly"
+      }
+    ],
+    "impact": {
+      "reboot": "none",
+      "downtime": "none",
+      "reason": "Restoring disks only creates new managed disks from the backup. These disks can then be attached to an existing VM or used to create a new VM manually. No impact to existing VMs.\n"
+    },
+    "mitigations": [
+      "verify-restore-point"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Restore disks",
+        "url": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#restore-disks"
+      }
+    ]
+  },
+  {
+    "id": "restore-vm-data-loss",
+    "name": "Data Loss After Restore Point",
+    "description": "Warning about data written after the restore point",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "RestoreVM"
+    ],
+    "conditions": [
+      {
+        "field": "action.restoreType",
+        "operator": "in",
+        "value": [
+          "replaceExisting",
+          "disksOnly"
+        ]
+      }
+    ],
+    "impact": {
+      "risk": "critical",
+      "reason": "Any data, configurations, or changes made AFTER the restore point will be permanently lost. This includes new files, database transactions, user accounts, and application state changes.\n",
+      "affectedComponents": [
+        "filesystem",
+        "databases",
+        "application-state",
+        "user-data"
+      ]
+    },
+    "mitigations": [
+      "backup-recent-data",
+      "export-databases",
+      "document-changes"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Before you restore",
+        "url": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#before-you-start"
+      }
+    ]
+  },
+  {
+    "id": "swap-os-disk-snapshot",
+    "name": "Swap OS Disk from Snapshot",
+    "description": "Replacing OS disk with one created from a snapshot",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "SwapOSDisk"
+    ],
+    "conditions": [
+      {
+        "field": "action.swapSource",
+        "operator": "eq",
+        "value": "snapshot"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Swapping the OS disk requires stopping the VM, detaching the current OS disk, and attaching the new disk. The VM will boot from the new disk with the state captured in the snapshot.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "backup-current-os-disk",
+      "verify-snapshot"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Swap OS Disk (Windows)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/os-disk-swap"
+      },
+      {
+        "title": "Azure Docs - Swap OS Disk (Linux)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/os-disk-swap"
+      }
+    ]
+  },
+  {
+    "id": "swap-os-disk-disk",
+    "name": "Swap OS Disk from Existing Disk",
+    "description": "Replacing OS disk with another managed disk",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "SwapOSDisk"
+    ],
+    "conditions": [
+      {
+        "field": "action.swapSource",
+        "operator": "eq",
+        "value": "disk"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "medium",
+      "reason": "Swapping to an existing managed disk requires stopping the VM and replacing the OS disk. Ensure the disk is compatible with the VM's generation (Gen1/Gen2) and contains a bootable OS.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "backup-current-os-disk",
+      "verify-disk-compatibility"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Swap OS Disk (Windows)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/os-disk-swap"
+      },
+      {
+        "title": "Azure Docs - Swap OS Disk (Linux)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/os-disk-swap"
+      }
+    ]
+  },
+  {
+    "id": "swap-os-disk-backup",
+    "name": "Swap OS Disk from Backup",
+    "description": "Replacing OS disk with one restored from Azure Backup",
+    "type": "rule",
+    "layer": "infra",
+    "actions": [
+      "SwapOSDisk"
+    ],
+    "conditions": [
+      {
+        "field": "action.swapSource",
+        "operator": "eq",
+        "value": "backup"
+      }
+    ],
+    "impact": {
+      "reboot": "guaranteed",
+      "downtime": "high",
+      "reason": "Restoring an OS disk from Azure Backup involves creating a new disk from the recovery point, then swapping it. This takes longer than using a snapshot due to the restore process.\n"
+    },
+    "mitigations": [
+      "stop-vm-gracefully",
+      "backup-current-os-disk",
+      "verify-restore-point"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Restore disks",
+        "url": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#restore-disks"
+      }
+    ]
+  },
+  {
+    "id": "swap-os-disk-state-loss",
+    "name": "OS State Loss on Swap",
+    "description": "Warning about losing current OS state",
+    "type": "rule",
+    "layer": "guest",
+    "actions": [
+      "SwapOSDisk"
+    ],
+    "conditions": [],
+    "impact": {
+      "risk": "high",
+      "reason": "Swapping the OS disk replaces the entire operating system state. Any changes made since the source disk/snapshot was created will be lost, including installed software, configurations, and logs.\n",
+      "affectedComponents": [
+        "operating-system",
+        "installed-software",
+        "system-configuration",
+        "logs"
+      ]
+    },
+    "mitigations": [
+      "backup-current-os-disk",
+      "export-configurations",
+      "document-installed-software"
+    ],
+    "sources": [
+      {
+        "title": "Azure Docs - Swap OS Disk (Windows)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/os-disk-swap"
+      },
+      {
+        "title": "Azure Docs - Swap OS Disk (Linux)",
+        "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/os-disk-swap"
+      }
+    ]
+  },
+  {
     "id": "resize-temp-disk-change-windows",
     "name": "Temp Disk Size Change (Windows)",
     "description": "Target SKU has different temp disk size on Windows",

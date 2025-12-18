@@ -18,6 +18,8 @@ import {
   Square,
   Camera,
   Network,
+  RotateCcw,
+  Replace,
 } from "lucide-react";
 import { VMContext, DiskConfig, ActionType, Action, DiskTopology } from "@/types";
 import { skus } from "@/data/skus";
@@ -177,6 +179,25 @@ const actionGroups = [
       },
     ],
   },
+  {
+    name: "Backup & Recovery",
+    actions: [
+      {
+        type: "RestoreVM" as ActionType,
+        label: "Restore VM",
+        description: "From backup/snapshot",
+        icon: RotateCcw,
+        color: "lime",
+      },
+      {
+        type: "SwapOSDisk" as ActionType,
+        label: "Swap OS Disk",
+        description: "Replace OS disk",
+        icon: Replace,
+        color: "fuchsia",
+      },
+    ],
+  },
 ];
 
 const linuxTopologies = [
@@ -234,6 +255,12 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
 
   // NIC state
   const [currentNicCount, setCurrentNicCount] = useState(1);
+
+  // Restore VM state
+  const [restoreType, setRestoreType] = useState<"newVM" | "replaceExisting" | "disksOnly">("newVM");
+
+  // Swap OS Disk state
+  const [swapSource, setSwapSource] = useState<"snapshot" | "disk" | "backup">("snapshot");
 
   // Initialize from profile when loaded
   useEffect(() => {
@@ -334,6 +361,8 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
       }),
       ...(actionType === "CaptureVM" && { generalize: generalizeVM }),
       ...((actionType === "AddNIC" || actionType === "RemoveNIC") && { nicCount: currentNicCount }),
+      ...(actionType === "RestoreVM" && { restoreType }),
+      ...(actionType === "SwapOSDisk" && { swapSource }),
     };
 
     onSubmit(context, action);
@@ -365,6 +394,8 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
       violet: "from-violet-500 to-violet-600",
       sky: "from-sky-500 to-sky-600",
       slate: "from-slate-500 to-slate-600",
+      lime: "from-lime-500 to-lime-600",
+      fuchsia: "from-fuchsia-500 to-fuchsia-600",
     };
     return colors[color] || colors.blue;
   };
@@ -385,6 +416,8 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
       violet: "border-violet-500",
       sky: "border-sky-500",
       slate: "border-slate-500",
+      lime: "border-lime-500",
+      fuchsia: "border-fuchsia-500",
     };
     return colors[color] || colors.blue;
   };
@@ -1348,6 +1381,156 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
                       </p>
                     </div>
                   )}
+                </div>
+              </>
+            )}
+
+            {/* Restore VM */}
+            {actionType === "RestoreVM" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-lime-500/20">
+                    <RotateCcw className="w-6 h-6 text-lime-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Restore VM</h2>
+                    <p className="text-sm text-gray-400">Restore from backup or snapshot</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">Restore Type</label>
+                    <div className="space-y-3">
+                      {[
+                        { type: "newVM" as const, label: "Create New VM", desc: "Restore to a new VM without affecting the original", risk: "low" },
+                        { type: "replaceExisting" as const, label: "Replace Existing VM", desc: "Delete current VM and restore from backup", risk: "high" },
+                        { type: "disksOnly" as const, label: "Restore Disks Only", desc: "Create new disks from backup to attach manually", risk: "medium" },
+                      ].map(({ type, label, desc, risk }) => (
+                        <motion.button
+                          key={type}
+                          onClick={() => setRestoreType(type)}
+                          className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                            restoreType === type
+                              ? "border-lime-500 bg-lime-500/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          }`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{label}</p>
+                              <p className="text-xs text-gray-400 mt-1">{desc}</p>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              risk === "low" ? "bg-emerald-900/50 text-emerald-300" :
+                              risk === "medium" ? "bg-amber-900/50 text-amber-300" :
+                              "bg-red-900/50 text-red-300"
+                            }`}>
+                              {risk} risk
+                            </span>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {restoreType === "replaceExisting" && (
+                    <div className="bg-red-900/30 border border-red-700 rounded-xl p-4">
+                      <p className="text-red-300 font-medium mb-2">⚠️ Critical Warning</p>
+                      <p className="text-sm text-gray-300">
+                        This will <strong>delete your current VM</strong> and create a new one from the restore point.
+                        All data written after the restore point will be <strong>permanently lost</strong>.
+                      </p>
+                    </div>
+                  )}
+
+                  {restoreType === "disksOnly" && (
+                    <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
+                      <p className="text-sm text-gray-300">
+                        Restored disks can be attached to an existing VM or used to create a new VM manually.
+                        Data on the restored disks will be from the restore point date.
+                      </p>
+                    </div>
+                  )}
+
+                  {restoreType === "newVM" && (
+                    <div className="bg-lime-900/20 border border-lime-800 rounded-xl p-4">
+                      <p className="text-sm text-gray-300">
+                        A new VM will be created alongside your existing VM. Both can run simultaneously.
+                        No impact to your current workload.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Swap OS Disk */}
+            {actionType === "SwapOSDisk" && (
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-fuchsia-500/20">
+                    <Replace className="w-6 h-6 text-fuchsia-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Swap OS Disk</h2>
+                    <p className="text-sm text-gray-400">Replace OS disk with another disk</p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-3">Source</label>
+                    <div className="space-y-3">
+                      {[
+                        { source: "snapshot" as const, label: "From Snapshot", desc: "Use a disk created from a snapshot", time: "Fast" },
+                        { source: "disk" as const, label: "From Existing Disk", desc: "Use another managed disk directly", time: "Fast" },
+                        { source: "backup" as const, label: "From Azure Backup", desc: "Restore disk from recovery point first", time: "Slower" },
+                      ].map(({ source, label, desc, time }) => (
+                        <motion.button
+                          key={source}
+                          onClick={() => setSwapSource(source)}
+                          className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                            swapSource === source
+                              ? "border-fuchsia-500 bg-fuchsia-500/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          }`}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{label}</p>
+                              <p className="text-xs text-gray-400 mt-1">{desc}</p>
+                            </div>
+                            <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">
+                              {time}
+                            </span>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
+                    <p className="text-amber-300 font-medium mb-2">⚠️ Important</p>
+                    <p className="text-sm text-gray-300">
+                      Swapping the OS disk will replace the entire operating system.
+                      Any changes made since the source disk was created will be <strong>lost</strong>.
+                      The VM must be stopped to perform this operation.
+                    </p>
+                  </div>
+
+                  <div className="bg-fuchsia-900/20 border border-fuchsia-800 rounded-xl p-4">
+                    <p className="text-sm text-gray-300">
+                      <strong>Requirements:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-300 list-disc list-inside mt-2 space-y-1">
+                      <li>New disk must match VM generation (Gen1/Gen2)</li>
+                      <li>Disk size must be equal or larger</li>
+                      <li>Encryption settings must be compatible</li>
+                    </ul>
+                  </div>
                 </div>
               </>
             )}

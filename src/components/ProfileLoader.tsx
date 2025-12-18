@@ -360,7 +360,7 @@ export function ProfileLoader({ isOpen, onClose, onProfileLoaded }: ProfileLoade
                 <div>
                   <p className="text-xs font-medium text-emerald-300">Your Data Stays Local</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    All processing happens in your browser. No data is stored, transmitted, or logged.
+                    Encrypted in memory, processed locally, cleared on close. Never stored, transmitted or logged.
                   </p>
                 </div>
               </div>

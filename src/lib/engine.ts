@@ -354,6 +354,26 @@ export function getActionDisplayName(actionType: Action["type"], action?: Action
     return action.generalize ? "Capture VM (Generalized)" : "Capture VM (Specialized)";
   }
 
+  // Handle restore with type option
+  if (actionType === "RestoreVM" && action?.restoreType) {
+    const types: Record<string, string> = {
+      newVM: "Restore to New VM",
+      replaceExisting: "Restore & Replace Existing",
+      disksOnly: "Restore Disks Only",
+    };
+    return types[action.restoreType] || "Restore VM";
+  }
+
+  // Handle swap OS disk with source option
+  if (actionType === "SwapOSDisk" && action?.swapSource) {
+    const sources: Record<string, string> = {
+      snapshot: "Swap OS Disk (from Snapshot)",
+      disk: "Swap OS Disk (from Disk)",
+      backup: "Swap OS Disk (from Backup)",
+    };
+    return sources[action.swapSource] || "Swap OS Disk";
+  }
+
   const names: Record<Action["type"], string> = {
     ResizeVM: "Resize VM",
     ResizeOSDisk: "Resize OS Disk",
@@ -368,6 +388,8 @@ export function getActionDisplayName(actionType: Action["type"], action?: Action
     CaptureVM: "Capture VM",
     AddNIC: "Add Network Interface",
     RemoveNIC: "Remove Network Interface",
+    RestoreVM: "Restore VM",
+    SwapOSDisk: "Swap OS Disk",
   };
   return names[actionType];
 }

@@ -52,7 +52,9 @@ export type ActionType =
   | "DeallocateVM"
   | "CaptureVM"
   | "AddNIC"
-  | "RemoveNIC";
+  | "RemoveNIC"
+  | "RestoreVM"
+  | "SwapOSDisk";
 
 export interface Action {
   type: ActionType;
@@ -66,6 +68,10 @@ export interface Action {
   generalize?: boolean;
   // NIC-specific options
   nicCount?: number;
+  // Restore-specific options
+  restoreType?: "newVM" | "replaceExisting" | "disksOnly";
+  // Swap OS Disk options
+  swapSource?: "snapshot" | "disk" | "backup";
 }
 
 // Impact Types

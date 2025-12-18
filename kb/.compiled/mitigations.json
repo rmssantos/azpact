@@ -407,5 +407,145 @@
       "all"
     ],
     "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/azure-vms-no-temp-disk"
+  },
+  {
+    "id": "verify-restore-point",
+    "title": "Verify Restore Point",
+    "description": "Verify the restore point or snapshot contains the expected data and is from the correct date/time.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms"
+  },
+  {
+    "id": "verify-network-config",
+    "title": "Verify Network Configuration",
+    "description": "Ensure the restored VM will have correct network settings (VNet, subnet, NSG, public IP).",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/backup/backup-azure-arm-restore-vms#network-configuration"
+  },
+  {
+    "id": "backup-recent-data",
+    "title": "Backup Recent Data",
+    "description": "Export or backup any data created after the restore point that you need to preserve.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "steps": [
+      "Identify data created after the restore point date",
+      "Export databases to external storage",
+      "Copy important files to Azure Blob or another VM",
+      "Document any configuration changes made"
+    ]
+  },
+  {
+    "id": "export-databases",
+    "title": "Export Databases",
+    "description": "Export database contents to preserve data created after the restore point.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "steps": [
+      "Create database backups using native tools (mysqldump, pg_dump, SQL Server backup)",
+      "Export to Azure Blob Storage or external location",
+      "Verify backup integrity before proceeding"
+    ]
+  },
+  {
+    "id": "document-changes",
+    "title": "Document Recent Changes",
+    "description": "Document all configuration changes made since the restore point for manual reapplication.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "steps": [
+      "List installed software and updates",
+      "Document network configuration changes",
+      "Export application settings",
+      "Note any user account changes"
+    ]
+  },
+  {
+    "id": "backup-current-os-disk",
+    "title": "Snapshot Current OS Disk",
+    "description": "Create a snapshot of the current OS disk before swapping in case you need to revert.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/snapshot-copy-managed-disk"
+  },
+  {
+    "id": "verify-snapshot",
+    "title": "Verify Snapshot Integrity",
+    "description": "Verify the snapshot is valid and was created when the VM was in a consistent state.",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/snapshot-copy-managed-disk"
+  },
+  {
+    "id": "verify-disk-compatibility",
+    "title": "Verify Disk Compatibility",
+    "description": "Ensure the new OS disk is compatible with the VM (same generation, encryption settings, size).",
+    "phase": "before",
+    "required": true,
+    "platforms": [
+      "all"
+    ],
+    "docUrl": "https://learn.microsoft.com/en-us/azure/virtual-machines/windows/os-disk-swap",
+    "steps": [
+      "Verify disk generation matches VM (Gen1/Gen2)",
+      "Check disk size is equal or larger",
+      "Ensure encryption settings are compatible",
+      "Confirm disk contains a bootable OS"
+    ]
+  },
+  {
+    "id": "export-configurations",
+    "title": "Export System Configurations",
+    "description": "Export current system configurations before swap to enable manual restoration if needed.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "steps": [
+      "Export network configuration (IP, DNS, routes)",
+      "Backup installed services list",
+      "Export registry hives (Windows) or /etc configs (Linux)",
+      "Document scheduled tasks and cron jobs"
+    ]
+  },
+  {
+    "id": "document-installed-software",
+    "title": "Document Installed Software",
+    "description": "Create a list of all installed software and versions for reference after swap.",
+    "phase": "before",
+    "required": false,
+    "platforms": [
+      "all"
+    ],
+    "steps": [
+      "Windows: Export list from Programs and Features",
+      "Linux: Export package list (dpkg --get-selections or rpm -qa)",
+      "Note any manually installed applications",
+      "Document license keys if needed"
+    ]
   }
 ]
