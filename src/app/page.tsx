@@ -78,6 +78,7 @@ function HomeContent() {
 
     const currentAnalysisId = analysisId;
     let cancelled = false;
+    let failsafeId: NodeJS.Timeout | null = null;
 
     // Use requestAnimationFrame + setTimeout for more reliable execution
     const runAnalysis = () => {
@@ -89,12 +90,27 @@ function HomeContent() {
         console.log("[AZpact] Analysis complete", currentAnalysisId);
 
         if (!cancelled) {
+          // Clear the failsafe since we completed successfully
+          if (failsafeId) {
+            clearTimeout(failsafeId);
+            failsafeId = null;
+            console.log("[AZpact] Cleared failsafe timeout");
+          }
+          console.log("[AZpact] Setting report and isAnalyzing=false");
           setReport(result);
           setIsAnalyzing(false);
+          console.log("[AZpact] State updates queued");
+        } else {
+          console.log("[AZpact] Skipped - cancelled=true");
         }
       } catch (error) {
         console.error("[AZpact] Error evaluating impact:", error);
         if (!cancelled) {
+          // Clear the failsafe since we're handling the error
+          if (failsafeId) {
+            clearTimeout(failsafeId);
+            failsafeId = null;
+          }
           setReport({
             blocked: false,
             infra: {
@@ -122,8 +138,9 @@ function HomeContent() {
     }, 300);
 
     // Auto-recovery failsafe after 10 seconds
-    const failsafeId = setTimeout(() => {
-      if (!cancelled && isAnalyzing) {
+    failsafeId = setTimeout(() => {
+      console.log("[AZpact] Failsafe timer fired, cancelled=", cancelled);
+      if (!cancelled) {
         console.warn("[AZpact] Failsafe triggered: auto-recovering from stuck state");
         setIsAnalyzing(false);
         setReport({
@@ -148,7 +165,7 @@ function HomeContent() {
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
-      clearTimeout(failsafeId);
+      if (failsafeId) clearTimeout(failsafeId);
     };
   }, [analysisId]); // Only re-run when analysisId changes
 
