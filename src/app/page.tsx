@@ -19,7 +19,9 @@ function HomeContent() {
   const [copied, setCopied] = useState(false);
   const [profile, setProfile] = useState<ParsedVMProfile | null>(null);
   const [showProfileLoader, setShowProfileLoader] = useState(false);
+  const [analyzingTooLong, setAnalyzingTooLong] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+  const analyzingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Generate shareable URL from current context and action
   const generateShareUrl = () => {
@@ -66,8 +68,31 @@ function HomeContent() {
     setCurrentAction(action);
     setCurrentContext(context);
 
+    // Auto-recovery failsafe - if nothing happens after 10s, force complete
+    const failsafeTimeout = setTimeout(() => {
+      console.warn("Failsafe triggered: auto-recovering from stuck analyzing state");
+      setIsAnalyzing(false);
+      setReport({
+        blocked: false,
+        infra: {
+          reboot: "none",
+          downtime: "none",
+          reason: "Analysis timed out. Please try again.",
+        },
+        guest: {
+          risk: "low",
+          reason: "Unable to complete analysis.",
+          affectedComponents: [],
+        },
+        mitigations: [],
+        explanation: "The analysis took too long and was automatically cancelled.",
+        matchedRules: [],
+      });
+    }, 10000);
+
     // Brief delay for UX feedback
     setTimeout(() => {
+      clearTimeout(failsafeTimeout);
       try {
         const result = evaluateImpact(context, action);
         setReport(result);
@@ -95,6 +120,27 @@ function HomeContent() {
       }
     }, 300);
   };
+
+  // Failsafe timeout for analyzing state
+  useEffect(() => {
+    if (isAnalyzing) {
+      setAnalyzingTooLong(false);
+      analyzingTimeoutRef.current = setTimeout(() => {
+        setAnalyzingTooLong(true);
+      }, 5000); // Show retry option after 5 seconds
+    } else {
+      setAnalyzingTooLong(false);
+      if (analyzingTimeoutRef.current) {
+        clearTimeout(analyzingTimeoutRef.current);
+        analyzingTimeoutRef.current = null;
+      }
+    }
+    return () => {
+      if (analyzingTimeoutRef.current) {
+        clearTimeout(analyzingTimeoutRef.current);
+      }
+    };
+  }, [isAnalyzing]);
 
   // Parse URL params and auto-evaluate on mount
   useEffect(() => {
@@ -162,6 +208,20 @@ function HomeContent() {
     setReport(null);
     setCurrentAction(null);
     setCurrentContext(null);
+  };
+
+  const handleRetryAnalyzing = () => {
+    setIsAnalyzing(false);
+    setAnalyzingTooLong(false);
+    // If we have context and action, retry the analysis
+    if (currentContext && currentAction) {
+      setTimeout(() => handleSubmit(currentContext, currentAction), 100);
+    }
+  };
+
+  const handleCancelAnalyzing = () => {
+    setIsAnalyzing(false);
+    setAnalyzingTooLong(false);
   };
 
   // Get SKU info for display
@@ -263,6 +323,30 @@ function HomeContent() {
               </motion.div>
               <p className="text-lg font-medium text-gray-300">Analyzing impact...</p>
               <p className="text-sm text-gray-500 mt-2">Evaluating rules and conditions</p>
+
+              {analyzingTooLong && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 pt-4 border-t border-gray-700"
+                >
+                  <p className="text-sm text-amber-400 mb-3">Taking too long?</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      onClick={handleRetryAnalyzing}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      onClick={handleCancelAnalyzing}
+                      className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           ) : !report ? (
             <motion.div
