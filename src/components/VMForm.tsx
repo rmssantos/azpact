@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight,
@@ -23,11 +23,9 @@ import {
 } from "lucide-react";
 import { VMContext, DiskConfig, ActionType, Action, DiskTopology } from "@/types";
 import { skus } from "@/data/skus";
-import { ParsedVMProfile } from "@/lib/profile-parser";
 
 interface VMFormProps {
   onSubmit: (context: VMContext, action: Action) => void;
-  profile?: ParsedVMProfile | null;
 }
 
 // Quick start examples for common scenarios
@@ -222,7 +220,7 @@ const pageTransition = {
   transition: { duration: 0.3, ease: "easeOut" as const },
 };
 
-export function VMForm({ onSubmit, profile }: VMFormProps) {
+export function VMForm({ onSubmit }: VMFormProps) {
   const [step, setStep] = useState(1);
   const [actionType, setActionType] = useState<ActionType | null>(null);
 
@@ -261,22 +259,6 @@ export function VMForm({ onSubmit, profile }: VMFormProps) {
 
   // Swap OS Disk state
   const [swapSource, setSwapSource] = useState<"snapshot" | "disk" | "backup">("snapshot");
-
-  // Initialize from profile when loaded
-  useEffect(() => {
-    if (profile) {
-      // Check if SKU exists in our list, otherwise use it anyway
-      const skuExists = skus.some(s => s.name === profile.sku);
-      if (skuExists) {
-        setSourceSku(profile.sku);
-      }
-      setGeneration(profile.generation);
-      setOsFamily(profile.osFamily);
-      setDataDisksCount(profile.disks.data.length);
-      setCurrentNicCount(profile.nicCount);
-      setIsZonalVM(profile.zonal);
-    }
-  }, [profile]);
 
   const currentSourceSku = skus.find((s) => s.name === sourceSku);
   const currentTargetSku = skus.find((s) => s.name === targetSku);

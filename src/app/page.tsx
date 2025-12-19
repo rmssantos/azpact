@@ -3,12 +3,11 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Radar, Share2, Check, Upload } from "lucide-react";
+import { ArrowLeft, Radar, Share2, Check } from "lucide-react";
 import { VMContext, Action, ImpactReport as ImpactReportType, ActionType, DiskTopology } from "@/types";
 import { evaluateImpact, getActionDisplayName } from "@/lib/engine";
 import { getSKU } from "@/data/skus";
-import { VMForm, ImpactReport, CloudIcon, Header, ProfileLoader, ProfileCard } from "@/components";
-import { ParsedVMProfile } from "@/lib/profile-parser";
+import { VMForm, ImpactReport, CloudIcon, Header } from "@/components";
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -16,8 +15,6 @@ function HomeContent() {
   const [currentAction, setCurrentAction] = useState<Action | null>(null);
   const [currentContext, setCurrentContext] = useState<VMContext | null>(null);
   const [copied, setCopied] = useState(false);
-  const [profile, setProfile] = useState<ParsedVMProfile | null>(null);
-  const [showProfileLoader, setShowProfileLoader] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   // Generate shareable URL from current context and action
@@ -205,36 +202,7 @@ function HomeContent() {
           <p className="text-gray-400">
             Understand the real impact of Azure VM changes before execution
           </p>
-
-          {/* Load Profile Button */}
-          {!report && !profile && (
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              onClick={() => setShowProfileLoader(true)}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/80 hover:bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white transition-all text-sm"
-            >
-              <Upload className="w-4 h-4" />
-              Load VM Profile from Azure CLI
-            </motion.button>
-          )}
         </motion.div>
-
-        {/* Profile Card (when loaded) */}
-        {profile && !report && (
-          <ProfileCard
-            profile={profile}
-            onClear={() => setProfile(null)}
-          />
-        )}
-
-        {/* Profile Loader Modal */}
-        <ProfileLoader
-          isOpen={showProfileLoader}
-          onClose={() => setShowProfileLoader(false)}
-          onProfileLoaded={(p) => setProfile(p)}
-        />
 
         {/* Main Content */}
         <AnimatePresence mode="wait">
@@ -245,7 +213,7 @@ function HomeContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <VMForm onSubmit={handleSubmit} profile={profile} />
+              <VMForm onSubmit={handleSubmit} />
             </motion.div>
           ) : (
             <motion.div
