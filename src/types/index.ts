@@ -1,15 +1,15 @@
 // VM Configuration Types
 export interface VMConfig {
-  sku: string;
-  generation: "Gen1" | "Gen2";
-  zonal: boolean;
-  zone?: string;
+  readonly sku: string;
+  readonly generation: "Gen1" | "Gen2";
+  readonly zonal: boolean;
+  readonly zone?: string;
 }
 
 export interface OSConfig {
-  family: "Linux" | "Windows";
-  distro: string;
-  version: string;
+  readonly family: "Linux" | "Windows";
+  readonly distro: string;
+  readonly version: string;
 }
 
 // Linux topologies
@@ -157,22 +157,22 @@ export type RuleCategory = "infra" | "guest" | "blocker";
 export type ProcessorType = "Intel" | "AMD" | "ARM";
 
 export interface SKUInfo {
-  name: string;
-  family: string;
-  vCPUs: number;
-  memoryGB: number;
-  maxDataDisks: number;
-  tempDiskGB: number;
-  premiumIO: boolean;
-  acceleratedNetworking: boolean;
-  generation: ("Gen1" | "Gen2")[];
-  processor: ProcessorType;
+  readonly name: string;
+  readonly family: string;
+  readonly vCPUs: number;
+  readonly memoryGB: number;
+  readonly maxDataDisks: number;
+  readonly tempDiskGB: number;
+  readonly premiumIO: boolean;
+  readonly acceleratedNetworking: boolean;
+  readonly generation: readonly ("Gen1" | "Gen2")[];
+  readonly processor: ProcessorType;
 }
 
 export interface OSImage {
-  id: string;
-  family: "Linux" | "Windows";
-  distro: string;
-  version: string;
-  displayName: string;
+  readonly id: string;
+  readonly family: "Linux" | "Windows";
+  readonly distro: string;
+  readonly version: string;
+  readonly displayName: string;
 }

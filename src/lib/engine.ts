@@ -10,6 +10,7 @@ import {
   RebootLevel,
   DowntimeLevel,
   RiskLevel,
+  ActionType,
 } from "@/types";
 import {
   rules,
@@ -19,6 +20,66 @@ import {
   getGuestRules,
 } from "@/data/kb-loader";
 import { getSKU } from "@/data/skus";
+
+// Build rule indices for O(1) lookup by action type
+const rulesByAction = new Map<ActionType, Rule[]>();
+const blockersByAction = new Map<ActionType, Rule[]>();
+const infraRulesByAction = new Map<ActionType, Rule[]>();
+const guestRulesByAction = new Map<ActionType, Rule[]>();
+
+// Initialize indices at module load
+function initializeRuleIndices() {
+  const blockers = getBlockerRules();
+  const infraRules = getInfraRules();
+  const guestRules = getGuestRules();
+
+  // Index blockers
+  for (const rule of blockers) {
+    for (const action of rule.actions) {
+      const actionType = action as ActionType;
+      if (!blockersByAction.has(actionType)) {
+        blockersByAction.set(actionType, []);
+      }
+      blockersByAction.get(actionType)!.push(rule);
+    }
+  }
+
+  // Index infra rules
+  for (const rule of infraRules) {
+    for (const action of rule.actions) {
+      const actionType = action as ActionType;
+      if (!infraRulesByAction.has(actionType)) {
+        infraRulesByAction.set(actionType, []);
+      }
+      infraRulesByAction.get(actionType)!.push(rule);
+    }
+  }
+
+  // Index guest rules
+  for (const rule of guestRules) {
+    for (const action of rule.actions) {
+      const actionType = action as ActionType;
+      if (!guestRulesByAction.has(actionType)) {
+        guestRulesByAction.set(actionType, []);
+      }
+      guestRulesByAction.get(actionType)!.push(rule);
+    }
+  }
+
+  // Index all rules
+  for (const rule of rules) {
+    for (const action of rule.actions) {
+      const actionType = action as ActionType;
+      if (!rulesByAction.has(actionType)) {
+        rulesByAction.set(actionType, []);
+      }
+      rulesByAction.get(actionType)!.push(rule);
+    }
+  }
+}
+
+// Initialize indices once at module load
+initializeRuleIndices();
 
 // Priority ordering for impact levels
 const rebootPriority: Record<RebootLevel, number> = {
@@ -63,9 +124,20 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 function buildEvalContext(
   context: VMContext,
   action: Action
-): Record<string, unknown> {
+): Record<string, unknown> | { error: string } {
   const currentSku = getSKU(context.vm.sku);
+
+  // Validate current SKU exists
+  if (!currentSku) {
+    return { error: `Invalid or unsupported VM SKU: ${context.vm.sku}` };
+  }
+
   const targetSku = action.targetSku ? getSKU(action.targetSku) : undefined;
+
+  // Validate target SKU if specified
+  if (action.targetSku && !targetSku) {
+    return { error: `Invalid or unsupported target VM SKU: ${action.targetSku}` };
+  }
 
   const dataDisks = context.disks.filter((d) => d.role === "data");
   const targetDisk = action.targetLun !== undefined
@@ -75,10 +147,10 @@ function buildEvalContext(
   return {
     vm: {
       ...context.vm,
-      family: currentSku?.family,
-      processor: currentSku?.processor,
-      hasTempDisk: currentSku && currentSku.tempDiskGB > 0,
-      tempDiskSize: currentSku?.tempDiskGB,
+      family: currentSku.family,
+      processor: currentSku.processor,
+      hasTempDisk: currentSku.tempDiskGB > 0,
+      tempDiskSize: currentSku.tempDiskGB,
       running: true, // Assume VM is running unless specified
     },
     os: context.os,
@@ -234,6 +306,28 @@ export function evaluateImpact(
   action: Action
 ): ImpactReport {
   const evalContext = buildEvalContext(context, action);
+
+  // Check for validation errors
+  if ('error' in evalContext && typeof evalContext.error === 'string') {
+    return {
+      blocked: true,
+      blockerReason: evalContext.error,
+      infra: {
+        reboot: "none",
+        downtime: "none",
+        reason: "Cannot evaluate - invalid configuration.",
+      },
+      guest: {
+        risk: "low",
+        reason: "Cannot evaluate - invalid configuration.",
+        affectedComponents: [],
+      },
+      mitigations: [],
+      explanation: `**ERROR:** ${evalContext.error}`,
+      matchedRules: [],
+    };
+  }
+
   const matchedRules: Rule[] = [];
   const mitigationIds = new Set<string>();
 
@@ -250,9 +344,9 @@ export function evaluateImpact(
     affectedComponents: [],
   };
 
-  // Check blockers first (type === "blocker")
-  const blockers = getBlockerRules();
-  for (const blocker of blockers) {
+  // Check blockers first - use indexed lookup for O(1) performance
+  const relevantBlockers = blockersByAction.get(action.type) || [];
+  for (const blocker of relevantBlockers) {
     if (ruleMatches(blocker, action, evalContext)) {
       return {
         blocked: true,
@@ -266,9 +360,9 @@ export function evaluateImpact(
     }
   }
 
-  // Evaluate infra rules (type === "rule" && layer === "infra")
-  const infraRules = getInfraRules();
-  for (const rule of infraRules) {
+  // Evaluate infra rules - use indexed lookup for O(1) performance
+  const relevantInfraRules = infraRulesByAction.get(action.type) || [];
+  for (const rule of relevantInfraRules) {
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
 
@@ -293,9 +387,9 @@ export function evaluateImpact(
     }
   }
 
-  // Evaluate guest rules (type === "rule" && layer === "guest")
-  const guestRules = getGuestRules();
-  for (const rule of guestRules) {
+  // Evaluate guest rules - use indexed lookup for O(1) performance
+  const relevantGuestRules = guestRulesByAction.get(action.type) || [];
+  for (const rule of relevantGuestRules) {
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
 

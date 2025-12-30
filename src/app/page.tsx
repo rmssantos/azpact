@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Radar, Share2, Check } from "lucide-react";
@@ -9,13 +9,23 @@ import { evaluateImpact, getActionDisplayName } from "@/lib/engine";
 import { getSKU } from "@/data/skus";
 import { VMForm, ImpactReport, CloudIcon, Header } from "@/components";
 
+// Valid action types for URL validation
+const VALID_ACTIONS = new Set<ActionType>([
+  'ResizeVM', 'ResizeOSDisk', 'ResizeDataDisk', 'DetachDisk', 'RedeployVM',
+  'EnableEncryption', 'ChangeZone', 'CrossRegionMove', 'StopVM', 'DeallocateVM',
+  'CaptureVM', 'AddNIC', 'RemoveNIC', 'RestoreVM', 'SwapOSDisk'
+]);
+
 function HomeContent() {
   const searchParams = useSearchParams();
   const [report, setReport] = useState<ImpactReportType | null>(null);
   const [currentAction, setCurrentAction] = useState<Action | null>(null);
   const [currentContext, setCurrentContext] = useState<VMContext | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+  const lastEvaluationTime = useRef<number>(0);
 
   // Generate shareable URL from current context and action
   const generateShareUrl = () => {
@@ -53,43 +63,84 @@ function HomeContent() {
     if (url) {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleSubmit = (context: VMContext, action: Action) => {
+  // Cleanup timeout when copied state changes
+  useEffect(() => {
+    if (copied) {
+      const timer = setTimeout(() => setCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copied]);
+
+  const handleSubmit = useCallback((context: VMContext, action: Action) => {
+    // Rate limiting: prevent rapid successive evaluations
+    const now = Date.now();
+    const timeSinceLastEvaluation = now - lastEvaluationTime.current;
+    const MIN_INTERVAL = 300; // 300ms between evaluations
+
+    if (timeSinceLastEvaluation < MIN_INTERVAL) {
+      // Too soon, ignore this evaluation
+      return;
+    }
+
+    lastEvaluationTime.current = now;
+    setError(null); // Clear previous errors
+    setIsEvaluating(true);
     setCurrentAction(action);
     setCurrentContext(context);
 
-    try {
-      const result = evaluateImpact(context, action);
-      setReport(result);
-    } catch (error) {
-      console.error("Error evaluating impact:", error);
-      setReport({
-        blocked: false,
-        infra: {
-          reboot: "none",
-          downtime: "none",
-          reason: `Error evaluating rules: ${error instanceof Error ? error.message : "Unknown error"}`,
-        },
-        guest: {
-          risk: "low",
-          reason: "Unable to evaluate guest impact due to error.",
-          affectedComponents: [],
-        },
-        mitigations: [],
-        explanation: "An error occurred during evaluation.",
-        matchedRules: [],
-      });
-    }
-  };
+    // Use setTimeout to allow UI to update with loading state
+    setTimeout(() => {
+      try {
+        const result = evaluateImpact(context, action);
+        setReport(result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(`Failed to evaluate impact: ${message}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Error evaluating impact:", err);
+        }
+        setReport({
+          blocked: false,
+          infra: {
+            reboot: "none",
+            downtime: "none",
+            reason: `Error evaluating rules: ${message}`,
+          },
+          guest: {
+            risk: "low",
+            reason: "Unable to evaluate guest impact due to error.",
+            affectedComponents: [],
+          },
+          mitigations: [],
+          explanation: "An error occurred during evaluation.",
+          matchedRules: [],
+        });
+      } finally {
+        setIsEvaluating(false);
+      }
+    }, 50); // Small delay to show loading state
+  }, []);
 
   // Parse URL params and auto-evaluate on mount
   useEffect(() => {
     const actionParam = searchParams.get("action") as ActionType | null;
     const skuParam = searchParams.get("sku");
     const osParam = searchParams.get("os") as "Linux" | "Windows" | null;
+
+    // Validate action type
+    if (actionParam && !VALID_ACTIONS.has(actionParam)) {
+      setError(`Invalid action type: ${actionParam}`);
+      return;
+    }
+
+    // Validate OS family
+    if (osParam && osParam !== "Linux" && osParam !== "Windows") {
+      setError(`Invalid OS family: ${osParam}`);
+      return;
+    }
 
     if (actionParam && skuParam && osParam) {
       const targetSkuParam = searchParams.get("targetSku");
@@ -131,7 +182,7 @@ function HomeContent() {
       // Trigger evaluation
       handleSubmit(context, action);
     }
-  }, [searchParams]);
+  }, [searchParams, handleSubmit]);
 
   // Scroll to results on mobile and focus after report is ready
   useEffect(() => {
@@ -204,6 +255,48 @@ function HomeContent() {
           </p>
         </motion.div>
 
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-500/50 text-red-400"
+            role="alert"
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <p className="font-semibold">Error</p>
+                <p className="text-sm mt-1">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-400 hover:text-red-300"
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading Indicator */}
+        {isEvaluating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="mb-6 p-4 rounded-lg bg-blue-900/20 border border-blue-500/50 text-blue-400"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-3">
+              <Radar className="w-5 h-5 animate-spin" />
+              <p className="text-sm font-medium">Analyzing impact...</p>
+            </div>
+          </motion.div>
+        )}
+
         {/* Main Content */}
         <AnimatePresence mode="wait">
           {!report ? (
@@ -236,6 +329,8 @@ function HomeContent() {
 
                 <button
                   onClick={handleCopyUrl}
+                  aria-label="Copy shareable link to clipboard"
+                  aria-live="polite"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors text-sm"
                 >
                   {copied ? (

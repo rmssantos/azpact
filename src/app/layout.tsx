@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ErrorBoundary } from "@/components";
 
 export const metadata: Metadata = {
   title: "AZpact - Azure VM Change Impact Radar | Predict Before You Act",
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
     description: "Understand the real impact of Azure VM changes before execution.",
     images: ["/og-image.svg"],
   },
-  metadataBase: new URL("https://calm-island-0629bae10.3.azurestaticapps.net"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "https://azpact.dev"),
 };
 
 export default function RootLayout({
@@ -39,17 +40,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Security: Prevent caching of sensitive data */}
-        <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
-        <meta httpEquiv="Pragma" content="no-cache" />
-        <meta httpEquiv="Expires" content="0" />
-        {/* Security: Referrer Policy - don't leak URLs */}
-        <meta name="referrer" content="no-referrer" />
-        {/* Note: X-Frame-Options, X-Content-Type-Options, and CSP must be set via HTTP headers, not meta tags */}
-        {/* These should be configured in staticwebapp.config.json for Azure Static Web Apps */}
+        {/* Note: Security headers (CSP, X-Frame-Options, X-Content-Type-Options) are configured via HTTP headers */}
+        {/* See staticwebapp.config.json for Azure Static Web Apps configuration */}
       </head>
       <body className="antialiased text-white">
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </body>
     </html>
   );

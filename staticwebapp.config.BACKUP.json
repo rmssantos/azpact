@@ -21,7 +21,7 @@
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
-    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://learn.microsoft.com; font-src 'self' data:; connect-src 'self' https://learn.microsoft.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://learn.microsoft.com; font-src 'self' data:; connect-src 'self' https://learn.microsoft.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   },
   "platform": {
     "apiRuntime": "node:18"

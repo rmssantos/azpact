@@ -4,12 +4,32 @@
  */
 
 import { Rule, Mitigation } from "@/types";
+import { rulesArraySchema, mitigationsArraySchema } from "@/schemas/kb.schema";
 import rulesJson from "@/../kb/.compiled/rules.json";
 import mitigationsJson from "@/../kb/.compiled/mitigations.json";
 
-// Cast imported JSON to proper types
-export const rules: Rule[] = rulesJson as Rule[];
-export const mitigations: Mitigation[] = mitigationsJson as Mitigation[];
+// Validate and parse KB files with runtime type checking
+function loadRules(): Rule[] {
+  try {
+    return rulesArraySchema.parse(rulesJson);
+  } catch (error) {
+    console.error("Failed to validate rules.json:", error);
+    throw new Error(`Invalid rules.json format. Please check the knowledge base files.`);
+  }
+}
+
+function loadMitigations(): Mitigation[] {
+  try {
+    return mitigationsArraySchema.parse(mitigationsJson);
+  } catch (error) {
+    console.error("Failed to validate mitigations.json:", error);
+    throw new Error(`Invalid mitigations.json format. Please check the knowledge base files.`);
+  }
+}
+
+// Load and validate KB files at module initialization
+export const rules: Rule[] = loadRules();
+export const mitigations: Mitigation[] = loadMitigations();
 
 // Create a map for O(1) mitigation lookup
 const mitigationMap = new Map<string, Mitigation>(
