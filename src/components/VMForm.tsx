@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight,
@@ -263,6 +263,11 @@ export function VMForm({ onSubmit }: VMFormProps) {
   const currentSourceSku = skus.find((s) => s.name === sourceSku);
   const currentTargetSku = skus.find((s) => s.name === targetSku);
   const topologies = osFamily === "Linux" ? linuxTopologies : windowsTopologies;
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
 
   const handleSelectAction = (type: ActionType) => {
     setActionType(type);

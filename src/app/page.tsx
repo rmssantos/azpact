@@ -7,7 +7,7 @@ import { ArrowLeft, Radar, Share2, Check } from "lucide-react";
 import { VMContext, Action, ImpactReport as ImpactReportType, ActionType, DiskTopology } from "@/types";
 import { evaluateImpact, getActionDisplayName } from "@/lib/engine";
 import { getSKU } from "@/data/skus";
-import { VMForm, ImpactReport, CloudIcon, Header } from "@/components";
+import { VMForm, ImpactReport, CloudIcon, Header, ScrollToTopButton } from "@/components";
 
 // Valid action types for URL validation
 const VALID_ACTIONS = new Set<ActionType>([
@@ -407,6 +407,9 @@ function HomeContent() {
           <p>Community tool. Not affiliated with Microsoft. Always verify with official docs.</p>
         </motion.footer>
       </div>
+
+      {/* Scroll to Top Button */}
+      <ScrollToTopButton />
     </main>
   );
 }
