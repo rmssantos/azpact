@@ -231,7 +231,7 @@ function HomeContent() {
         </motion.div>
       </div>
 
-      <div className="relative z-10 container mx-auto px-4 py-6 max-w-2xl">
+      <div className="relative z-10 container mx-auto px-4 py-6 max-w-5xl">
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}

@@ -12,7 +12,6 @@ import {
   HardDrive,
   BookOpen,
   FileText,
-  Bookmark,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -59,11 +58,93 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
         animate={{ opacity: 1, y: 0 }}
         className="glass rounded-xl p-6 glow-critical"
       >
-        <div className="flex items-center gap-3 mb-4">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           <XCircle className="w-8 h-8 text-red-500" />
           <h2 className="text-2xl font-bold text-red-400">Operation Blocked</h2>
         </div>
         <p className="text-gray-300 text-lg">{report.blockerReason}</p>
+
+        {/* Related Documentation */}
+        {(actionArticles.length > 0 || generalArticles.length > 0) && (
+          <div className="mt-6 border-t border-red-900/30 pt-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-blue-400" />
+              Related Documentation
+            </h3>
+
+            {actionArticles.length > 0 && (
+              <div className="mb-6">
+                <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  For this operation
+                </p>
+                <div className="grid gap-2">
+                  {actionArticles.slice(0, 4).map((article, index) => (
+                    <motion.a
+                      key={article.id}
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 + index * 0.05 }}
+                      className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors group"
+                    >
+                      <ExternalLink className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-white text-sm group-hover:text-blue-300 transition-colors">
+                          {article.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">
+                          {article.description}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        article.category === "action" ? "bg-blue-900/50 text-blue-300" :
+                        article.category === "troubleshoot" ? "bg-amber-900/50 text-amber-300" :
+                        "bg-emerald-900/50 text-emerald-300"
+                      }`}>
+                        {article.category === "action" ? "How-to" :
+                         article.category === "troubleshoot" ? "Troubleshoot" : "Best Practice"}
+                      </span>
+                    </motion.a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
+                <Bookmark className="w-4 h-4" />
+                Backup & Recovery
+              </p>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {generalArticles
+                  .filter((a) => a.category === "backup")
+                  .slice(0, 4)
+                  .map((article) => (
+                    <a
+                      key={article.id}
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-3 p-3 bg-gray-800/30 rounded-lg hover:bg-gray-800 transition-colors group"
+                    >
+                      <ExternalLink className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0 group-hover:text-blue-400 transition-colors" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-300 group-hover:text-blue-300 transition-colors">
+                          {article.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">
+                          {article.description}
+                        </p>
+                      </div>
+                    </a>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     );
   }
