@@ -12,6 +12,7 @@ import {
   HardDrive,
   BookOpen,
   FileText,
+  Bookmark,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -58,10 +59,10 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
         animate={{ opacity: 1, y: 0 }}
         className="glass rounded-xl p-6 glow-critical"
       >
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          <XCircle className="w-8 h-8 text-red-500" />
-          <h2 className="text-2xl font-bold text-red-400">Operation Blocked</h2>
-        </div>
+              <div className="flex items-center gap-3 mb-4">
+                <XCircle className="w-8 h-8 text-red-500" />
+                <h2 className="text-2xl font-bold text-red-400">Operation Blocked</h2>
+              </div>
         <p className="text-gray-300 text-lg">{report.blockerReason}</p>
 
         {/* Related Documentation */}
@@ -118,7 +119,7 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
                 <Bookmark className="w-4 h-4" />
                 Backup & Recovery
               </p>
-              <div className="grid sm:grid-cols-2 gap-2">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {generalArticles
                   .filter((a) => a.category === "backup")
                   .slice(0, 4)
@@ -452,7 +453,7 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
               <Bookmark className="w-4 h-4" />
               Backup & Recovery
             </p>
-            <div className="grid sm:grid-cols-2 gap-2">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {generalArticles
                 .filter((a) => a.category === "backup")
                 .slice(0, 4)
