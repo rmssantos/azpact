@@ -146,6 +146,110 @@ export const skus: SKUInfo[] = [
   },
 
   // ============================================
+  // E-series v3 - Intel (Memory Optimized)
+  // ============================================
+  {
+    name: "Standard_E2s_v3",
+    family: "Esv3",
+    vCPUs: 2,
+    memoryGB: 16,
+    maxDataDisks: 4,
+    tempDiskGB: 32,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E4s_v3",
+    family: "Esv3",
+    vCPUs: 4,
+    memoryGB: 32,
+    maxDataDisks: 8,
+    tempDiskGB: 64,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E8s_v3",
+    family: "Esv3",
+    vCPUs: 8,
+    memoryGB: 64,
+    maxDataDisks: 16,
+    tempDiskGB: 128,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E16s_v3",
+    family: "Esv3",
+    vCPUs: 16,
+    memoryGB: 128,
+    maxDataDisks: 32,
+    tempDiskGB: 256,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+
+  // ============================================
+  // E-series v4 - Intel (Memory Optimized)
+  // ============================================
+  {
+    name: "Standard_E2s_v4",
+    family: "Esv4",
+    vCPUs: 2,
+    memoryGB: 16,
+    maxDataDisks: 4,
+    tempDiskGB: 32,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E4s_v4",
+    family: "Esv4",
+    vCPUs: 4,
+    memoryGB: 32,
+    maxDataDisks: 8,
+    tempDiskGB: 64,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E8s_v4",
+    family: "Esv4",
+    vCPUs: 8,
+    memoryGB: 64,
+    maxDataDisks: 16,
+    tempDiskGB: 128,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+  {
+    name: "Standard_E16s_v4",
+    family: "Esv4",
+    vCPUs: 16,
+    memoryGB: 128,
+    maxDataDisks: 32,
+    tempDiskGB: 256,
+    premiumIO: true,
+    acceleratedNetworking: true,
+    generation: ["Gen1", "Gen2"],
+    processor: "Intel",
+  },
+
+  // ============================================
   // E-series v5 - Intel (Memory Optimized)
   // ============================================
   {
