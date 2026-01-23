@@ -2,9 +2,9 @@
 # Rules for disabling ADE on VMs
 
 - id: disable-ade-linux
-  name: Disable Azure Disk Encryption (Linux)
-  description: Disable ADE on Linux VM
-  type: rule
+  name: Disable Azure Disk Encryption (Linux OS Disk) - Not Supported
+  description: Disabling ADE on Linux OS disk is not supported
+  type: blocker
   layer: infra
   actions: [EnableEncryption]
   conditions:
@@ -14,12 +14,13 @@
     - field: action.encryptionOperation
       operator: eq
       value: disable
+    - field: action.encryptionTarget
+      operator: in
+      value: ["os", "all"]
   impact:
-    reboot: possible
-    downtime: low
     reason: >
-      Disabling Azure Disk Encryption on Linux data disks can be done online. However, disabling encryption on the OS disk requires a reboot. Decryption runs in the background.
-  mitigations: [backup-vm, stop-applications]
+      Disabling Azure Disk Encryption on Linux OS disks is not supported. Azure only supports disabling encryption for data disks.
+  mitigations: []
   sources:
     - title: "Disable Disk Encryption - Linux"
       url: "https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-linux"
