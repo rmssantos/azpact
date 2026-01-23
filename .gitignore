@@ -48,3 +48,4 @@ backups/
 # Documentation (internal review files - not needed in repo)
 CODE_REVIEW.md
 FIXES_SUMMARY.md
+CLAUDE.md

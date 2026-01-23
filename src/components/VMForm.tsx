@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useMemo, useId } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ChevronRight,
   ChevronLeft,
@@ -213,16 +213,23 @@ const windowsTopologies = [
   { value: "mirrored", label: "Mirrored", description: "RAID 1 equivalent" },
 ];
 
-const pageTransition = {
-  initial: { opacity: 0, x: 50 },
+// Animation that respects reduced motion preference (applied at component level)
+const getPageTransition = (prefersReducedMotion: boolean | null) => ({
+  initial: prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 50 },
   animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -50 },
-  transition: { duration: 0.3, ease: "easeOut" as const },
-};
+  exit: prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -50 },
+  transition: { duration: prefersReducedMotion ? 0.1 : 0.3, ease: "easeOut" as const },
+});
 
 export function VMForm({ onSubmit }: VMFormProps) {
   const [step, setStep] = useState(1);
   const [actionType, setActionType] = useState<ActionType | null>(null);
+
+  // Accessibility: Respect user's reduced motion preference
+  const prefersReducedMotion = useReducedMotion();
+
+  // Generate unique IDs for form elements (accessibility)
+  const formId = useId();
 
   // Resize VM state
   const [sourceSku, setSourceSku] = useState("Standard_D4s_v5");
@@ -260,9 +267,11 @@ export function VMForm({ onSubmit }: VMFormProps) {
   // Swap OS Disk state
   const [swapSource, setSwapSource] = useState<"snapshot" | "disk" | "backup">("snapshot");
 
-  const currentSourceSku = skus.find((s) => s.name === sourceSku);
-  const currentTargetSku = skus.find((s) => s.name === targetSku);
-  const topologies = osFamily === "Linux" ? linuxTopologies : windowsTopologies;
+  // Memoize computed values for performance
+  const currentSourceSku = useMemo(() => skus.find((s) => s.name === sourceSku), [sourceSku]);
+  const currentTargetSku = useMemo(() => skus.find((s) => s.name === targetSku), [targetSku]);
+  const topologies = useMemo(() => osFamily === "Linux" ? linuxTopologies : windowsTopologies, [osFamily]);
+  const pageTransition = useMemo(() => getPageTransition(prefersReducedMotion), [prefersReducedMotion]);
 
   // Scroll to top when step changes
   useEffect(() => {
@@ -538,11 +547,12 @@ export function VMForm({ onSubmit }: VMFormProps) {
                 <div className="space-y-5">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Current SKU</label>
+                      <label htmlFor={`${formId}-source-sku`} className="block text-sm font-medium text-gray-300 mb-2">Current SKU</label>
                       <select
+                        id={`${formId}-source-sku`}
                         value={sourceSku}
                         onChange={(e) => setSourceSku(e.target.value)}
-                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       >
                         {skus.map((sku) => (
                           <option key={sku.name} value={sku.name}>
@@ -552,11 +562,12 @@ export function VMForm({ onSubmit }: VMFormProps) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Target SKU</label>
+                      <label htmlFor={`${formId}-target-sku`} className="block text-sm font-medium text-gray-300 mb-2">Target SKU</label>
                       <select
+                        id={`${formId}-target-sku`}
                         value={targetSku}
                         onChange={(e) => setTargetSku(e.target.value)}
-                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       >
                         {skus.filter((s) => s.name !== sourceSku).map((sku) => (
                           <option key={sku.name} value={sku.name}>
@@ -592,9 +603,9 @@ export function VMForm({ onSubmit }: VMFormProps) {
                         </div>
                       </div>
                       {currentSourceSku.processor !== currentTargetSku.processor && (
-                        <div className="mt-3 pt-3 border-t border-gray-700">
+                        <div className="mt-3 pt-3 border-t border-gray-700" role="alert" aria-live="polite">
                           <span className="px-2 py-1 rounded bg-amber-900/50 text-amber-300 text-xs">
-                            ⚡ Processor change: {currentSourceSku.processor} → {currentTargetSku.processor}
+                            <span aria-hidden="true">⚡</span> Processor change: {currentSourceSku.processor} → {currentTargetSku.processor}
                           </span>
                         </div>
                       )}
@@ -603,22 +614,24 @@ export function VMForm({ onSubmit }: VMFormProps) {
 
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Generation</label>
+                      <label htmlFor={`${formId}-generation`} className="block text-sm font-medium text-gray-300 mb-2">Generation</label>
                       <select
+                        id={`${formId}-generation`}
                         value={generation}
                         onChange={(e) => setGeneration(e.target.value as "Gen1" | "Gen2")}
-                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       >
                         <option value="Gen1">Gen1</option>
                         <option value="Gen2">Gen2</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Data Disks</label>
+                      <label htmlFor={`${formId}-data-disks`} className="block text-sm font-medium text-gray-300 mb-2">Data Disks</label>
                       <select
+                        id={`${formId}-data-disks`}
                         value={dataDisksCount}
                         onChange={(e) => setDataDisksCount(parseInt(e.target.value))}
-                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       >
                         {[0, 1, 2, 4, 8, 16, 32].map((n) => (
                           <option key={n} value={n}>{n} disk{n !== 1 ? "s" : ""}</option>
@@ -628,10 +641,11 @@ export function VMForm({ onSubmit }: VMFormProps) {
                     <div className="flex items-end">
                       <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-gray-800/50 w-full">
                         <input
+                          id={`${formId}-ultra-ssd`}
                           type="checkbox"
                           checked={hasUltraSSD}
                           onChange={(e) => setHasUltraSSD(e.target.checked)}
-                          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"
+                          className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-2"
                         />
                         <span className="text-sm">Has Ultra SSD</span>
                       </label>
@@ -1627,23 +1641,25 @@ export function VMForm({ onSubmit }: VMFormProps) {
             )}
 
             {/* Navigation buttons */}
-            <div className="flex gap-3 mt-8">
+            <div className="flex gap-3 mt-8" role="navigation" aria-label="Form navigation">
               <motion.button
                 onClick={goBack}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all border border-gray-700"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
+                aria-label="Go back to action selection"
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                whileHover={prefersReducedMotion ? {} : { scale: 1.01 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.99 }}
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5" aria-hidden="true" />
                 Back
               </motion.button>
               <motion.button
                 onClick={handleSubmit}
-                className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                aria-label="Analyze impact of selected action"
+                className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
               >
-                <Zap className="w-5 h-5" />
+                <Zap className="w-5 h-5" aria-hidden="true" />
                 Analyze Impact
               </motion.button>
             </div>

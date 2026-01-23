@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { useState, useMemo } from "react";
 import {
   AlertTriangle,
   CheckCircle,
@@ -50,17 +50,27 @@ const severityLegend = {
 
 export function ImpactReport({ report, actionType }: ImpactReportProps) {
   const [showLegend, setShowLegend] = useState(false);
-  const actionArticles = actionType ? getArticlesForAction(actionType) : [];
-  const generalArticles = getGeneralArticles();
+  const prefersReducedMotion = useReducedMotion();
+
+  // Memoize article lookups
+  const actionArticles = useMemo(() => actionType ? getArticlesForAction(actionType) : [], [actionType]);
+  const generalArticles = useMemo(() => getGeneralArticles(), []);
+
+  // Animation props that respect reduced motion
+  const motionProps = prefersReducedMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
+
   if (report.blocked) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...motionProps}
         className="glass rounded-xl p-6 glow-critical"
+        role="alert"
+        aria-live="assertive"
       >
               <div className="flex items-center gap-3 mb-4">
-                <XCircle className="w-8 h-8 text-red-500" />
+                <XCircle className="w-8 h-8 text-red-500" aria-hidden="true" />
                 <h2 className="text-2xl font-bold text-red-400">Operation Blocked</h2>
               </div>
         <p className="text-gray-300 text-lg">{report.blockerReason}</p>
@@ -344,10 +354,12 @@ export function ImpactReport({ report, actionType }: ImpactReportProps) {
                         href={mitigation.docUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        aria-label={`${mitigation.title} - Microsoft Learn (opens in new window)`}
                         className="inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 mt-2"
                       >
-                        <ExternalLink className="w-4 h-4" />
+                        <ExternalLink className="w-4 h-4" aria-hidden="true" />
                         Microsoft Learn
+                        <span className="sr-only">(opens in new window)</span>
                       </a>
                     )}
                   </div>

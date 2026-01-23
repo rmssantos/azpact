@@ -494,8 +494,14 @@ export const skus: SKUInfo[] = [
   },
 ];
 
+// SKU lookup map for O(1) access - created once at module load
+const skuMap = new Map<string, SKUInfo>(skus.map((s) => [s.name, s]));
+
+/**
+ * Get SKU info by name with O(1) lookup performance.
+ */
 export function getSKU(name: string): SKUInfo | undefined {
-  return skus.find((s) => s.name === name);
+  return skuMap.get(name);
 }
 
 export function getSKUsByFamily(family: string): SKUInfo[] {

@@ -103,6 +103,27 @@ const riskPriority: Record<RiskLevel, number> = {
   critical: 3,
 };
 
+// Regex cache for performance optimization
+const regexCache = new Map<string, RegExp>();
+
+/**
+ * Get a cached RegExp instance, or create and cache a new one.
+ * Returns null if the pattern is invalid.
+ */
+function getCachedRegex(pattern: string): RegExp | null {
+  if (regexCache.has(pattern)) {
+    return regexCache.get(pattern)!;
+  }
+  try {
+    const regex = new RegExp(pattern);
+    regexCache.set(pattern, regex);
+    return regex;
+  } catch {
+    console.error(`Invalid regex pattern in rule condition: ${pattern}`);
+    return null;
+  }
+}
+
 // Get a nested value from an object using dot notation
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const parts = path.split(".");
@@ -230,12 +251,13 @@ function evaluateCondition(
         typeof compareValue === "number" &&
         fieldValue <= compareValue
       );
-    case "matches":
-      return (
-        typeof fieldValue === "string" &&
-        typeof compareValue === "string" &&
-        new RegExp(compareValue).test(fieldValue)
-      );
+    case "matches": {
+      if (typeof fieldValue !== "string" || typeof compareValue !== "string") {
+        return false;
+      }
+      const regex = getCachedRegex(compareValue);
+      return regex !== null && regex.test(fieldValue);
+    }
     default:
       return false;
   }
@@ -331,6 +353,10 @@ export function evaluateImpact(
   const matchedRules: Rule[] = [];
   const mitigationIds = new Set<string>();
 
+  // Collect all reasons from matched rules
+  const infraReasons: string[] = [];
+  const guestReasons: string[] = [];
+
   // Initial impact values
   let infraImpact: InfraImpact = {
     reboot: "none",
@@ -345,19 +371,32 @@ export function evaluateImpact(
   };
 
   // Check blockers first - use indexed lookup for O(1) performance
+  // Collect ALL matching blockers to show user complete picture
   const relevantBlockers = blockersByAction.get(action.type) || [];
+  const matchedBlockers: Rule[] = [];
   for (const blocker of relevantBlockers) {
     if (ruleMatches(blocker, action, evalContext)) {
-      return {
-        blocked: true,
-        blockerReason: blocker.impact.reason || blocker.description,
-        infra: infraImpact,
-        guest: guestImpact,
-        mitigations: [],
-        explanation: `**BLOCKED:** ${blocker.impact.reason || blocker.description}`,
-        matchedRules: [blocker.id],
-      };
+      matchedBlockers.push(blocker);
     }
+  }
+
+  if (matchedBlockers.length > 0) {
+    const blockerReasons = matchedBlockers.map(
+      (b) => `• ${b.name}: ${b.impact.reason || b.description}`
+    );
+    const combinedReason = matchedBlockers.length === 1
+      ? matchedBlockers[0].impact.reason || matchedBlockers[0].description
+      : `Multiple blockers detected:\n${blockerReasons.join("\n")}`;
+
+    return {
+      blocked: true,
+      blockerReason: combinedReason,
+      infra: infraImpact,
+      guest: guestImpact,
+      mitigations: [],
+      explanation: `**BLOCKED:** ${combinedReason}`,
+      matchedRules: matchedBlockers.map((b) => b.id),
+    };
   }
 
   // Evaluate infra rules - use indexed lookup for O(1) performance
@@ -366,13 +405,17 @@ export function evaluateImpact(
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
 
+      // Collect reason from this rule
+      if (rule.impact.reason) {
+        infraReasons.push(rule.impact.reason);
+      }
+
       // Aggregate impact (take highest severity)
       if (
         rule.impact.reboot &&
         rebootPriority[rule.impact.reboot] > rebootPriority[infraImpact.reboot]
       ) {
         infraImpact.reboot = rule.impact.reboot;
-        infraImpact.reason = rule.impact.reason;
       }
       if (
         rule.impact.downtime &&
@@ -387,11 +430,21 @@ export function evaluateImpact(
     }
   }
 
+  // Combine all infra reasons
+  if (infraReasons.length > 0) {
+    infraImpact.reason = infraReasons.join(" ");
+  }
+
   // Evaluate guest rules - use indexed lookup for O(1) performance
   const relevantGuestRules = guestRulesByAction.get(action.type) || [];
   for (const rule of relevantGuestRules) {
     if (ruleMatches(rule, action, evalContext)) {
       matchedRules.push(rule);
+
+      // Collect reason from this rule
+      if (rule.impact.reason) {
+        guestReasons.push(rule.impact.reason);
+      }
 
       // Aggregate impact (take highest severity)
       if (
@@ -399,7 +452,6 @@ export function evaluateImpact(
         riskPriority[rule.impact.risk] > riskPriority[guestImpact.risk]
       ) {
         guestImpact.risk = rule.impact.risk;
-        guestImpact.reason = rule.impact.reason;
       }
       if (rule.impact.affectedComponents) {
         guestImpact.affectedComponents = [
@@ -413,6 +465,11 @@ export function evaluateImpact(
       // Collect mitigations
       rule.mitigations.forEach((m) => mitigationIds.add(m));
     }
+  }
+
+  // Combine all guest reasons
+  if (guestReasons.length > 0) {
+    guestImpact.reason = guestReasons.join(" ");
   }
 
   // Get full mitigation objects
